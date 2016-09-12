@@ -148,22 +148,24 @@ metaVoxelDict, subjList, phenotypeDB_clean, data = getConfig()
 #  https://github.com/primetang/pyflann
 #  https://github.com/dougalsutherland/cyflann
 
-flann = FLANN()
-subjDBs = []
-numNeighbors = 5
+def buildSubjectTrees(data, numNeighbors=5):
+    flann = FLANN()
+    subjDBs = []
+    # build the tree for each subject
+    print "Now building subject-level mini databases..."
+    for subject in xrange(len(subjList)):
+        params = flann.build_index(data[subject]['I'], target_precision=0.0, log_level="info")
+        results = flann.nn_index(data[subject]['I'], numNeighbors, checks=params['checks'])
+        subj = {
+            'params': params,
+            'results': results
+        }
+        subjDBs.append(subj.copy())
 
-# build the tree for each subject
-print "Now building subject-level mini databases..."
-for subject in xrange(len(subjList)):
-    params = flann.build_index(data[subject]['I'], target_precision=0.0, log_level="info")
-    results = flann.nn_index(data[subject]['I'], numNeighbors, checks=params['checks'])
-    subj = {
-        'params': params,
-        'results': results
-    }
-    subjDBs.append(subj.copy())
+    print "Subject level databases complete!"
+    return subjDBs
 
-print "Subject level databases complete!"
+subjTrees = buildSubjectTrees(data, 5)
 
 # digression : http://www.theverge.com/google-deepmind
 
