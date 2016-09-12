@@ -8,10 +8,11 @@ import pandas as pd
 import pickle as pk
 import shelve
 import h5py
+from pyflann import *
 
 
 # this is a helper function to set the configuration
-def getConfig(pickleSettingName, useHarilick=False):
+def getConfig(useHarilick=False):
     #config = {}
     #config['pickleSettingName'] = pickleSettingName
     
@@ -108,7 +109,7 @@ def getConfig(pickleSettingName, useHarilick=False):
         
     # reading pickle and shelve files
     print "Reading the shelve file ..."
-    tic()
+    # tic()
     fid = shelve.open(shelveFn,'r')
     metaVoxelDict = fid['metaVoxelDict']
     #pca = fid['pcaHist']
@@ -116,27 +117,28 @@ def getConfig(pickleSettingName, useHarilick=False):
     phenotypeDB_clean = fid['phenotypeDB_clean']
     fid.close()
     print "Done !"
-    toc()
+    # toc()
 
     print "Here is how meta data look like: "
     print "IDs of a few subjects : " , metaVoxelDict[0]['id']
     print "Here is the labelIndex of the meta data (a few elements): " , metaVoxelDict[0]['labelIndex'][1:10]   
 
     print "Reading pickle file ...."
-    tic()
+    # tic()
     fid = open(pickleFn,'rb')
     data = pk.load(open(pickleFn,'rb'))
     fid.close()
     print "Done !"
-    toc()
+    # toc()
     
     #if useHarilick:
     #    return config, (nii_db, sprVxl_db), (harilick_db), (metaVoxelDict,subjList, phenotypeDB_clean, data)  
     #else:
     return metaVoxelDict,subjList, phenotypeDB_clean, data
 
-pickleFile = 
 metaVoxelDict, subjList, phenotypeDB_clean, data = getConfig()
+
+# see data_looking.ipynb for structure information
 
 # READ/PLAY WITH DATA FIRST
 
@@ -146,14 +148,27 @@ metaVoxelDict, subjList, phenotypeDB_clean, data = getConfig()
 #  https://github.com/primetang/pyflann
 #  https://github.com/dougalsutherland/cyflann
 
+flann = FLANN()
+subjDBs = []
+numNeighbors = 5
+
+# build the tree for each subject
+print "Now building subject-level mini databases..."
+for subject in xrange(len(subjList)):
+    params = flann.build_index(data[subject]['I'], target_precision=0.0, log_level="info")
+    results = flann.nn_index(data[subject]['I'], numNeighbors, checks=params['checks'])
+    subj = {
+        'params': params,
+        'results': results
+    }
+    subjDBs.append(subj.copy())
+
+print "Subject level databases complete!"
+
 # digression : http://www.theverge.com/google-deepmind
-
-
-
 
 #------------ NEXT STEP (WARNING: TAKE IT WITH HUGE GRAIN OF SULT)
 #  I installed this package : https://github.com/dougalsutherland/skl-groups
-
 # obs_knnObj_Kayhan = knnDiv.indices_[0]   # knn object for the observed data which is the first element in the list
 # knnDiv_Kayhan.features_.make_stacked()
 # X_feats_Jenna = knnDiv.features_.stacked_features
