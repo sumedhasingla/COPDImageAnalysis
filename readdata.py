@@ -176,6 +176,17 @@ subjTrees = buildSubjectTrees(data, 5)
 # obs_knnIdx = obs_knnObj_Kayhan.nn_index(X_feats_Jenna, 3)[0][:,2]
 # obs_knnDist = obs_knnObj.nn_index(X_feats_Jenna, 3)[1][:,2]
 
+# # interpretation
+# # isolate a subject tree
+# knnObj1 = subjTrees[0]
+# # get its features
+# knnObj1.features_.make_stacked()
+# # collect features of all other trees
+# allSubjFeatures = subjTrees.features_.stacked_features
+# # not sure what this is
+# indices = knnObj1.nn_index(allSubjFeatures, 3)[0][:, 2]
+# distances = subjTrees.nn_index(allSubjFeatures, 3)[1][:, 2]
+
 
 # -------------------------------
 # WE WILL BUILD SPARSE MATRIX representing the connectivity between nodes
