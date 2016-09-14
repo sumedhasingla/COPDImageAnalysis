@@ -1,7 +1,6 @@
 import sys
 import os
 import numpy as np
-import pystan
 
 # handling different types of data
 import pandas as pd
@@ -179,10 +178,10 @@ subjTrees = buildSubjectTrees(data, 5)
 
 
 # -------------------------------
-# WE WILL BUILD SPARSE MATRIX representiong the connectivity between nodes
+# WE WILL BUILD SPARSE MATRIX representing the connectivity between nodes
 
 
 # -----------------------
-# We will try igraph to dertect communities:
+# We will try igraph to detect communities:
 # http://igraph.org/redirect.html
 
