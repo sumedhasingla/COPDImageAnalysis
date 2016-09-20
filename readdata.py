@@ -147,24 +147,49 @@ metaVoxelDict, subjList, phenotypeDB_clean, data = getConfig()
 #  https://github.com/primetang/pyflann
 #  https://github.com/dougalsutherland/cyflann
 
-def buildSubjectTrees(data, numNeighbors=5):
+def buildSubjectTrees(data, numNodes=3):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - data: collection of data to be tree'ed
+    - numNodes: the number of nearest nodes to save
+
+    Returns:
+    - subjDBs: list of lists of dictionaries of lists
+        - first layer = first subject
+        - second layer = second subject
+        - third layer = dictionary accessed by keys
+        - "nodes": list of 
+
+    """
+    numNeighbors = 1 # how many nodes to compare the initial node to
+    numNodes = 3 # how many pairs to nodes to store for each bag
     flann = FLANN()
     subjDBs = []
     # build the tree for each subject
-    print "Now building subject-level mini databases..."
-    for subject in xrange(len(subjList)):
-        params = flann.build_index(data[subject]['I'], target_precision=0.0, log_level="info")
-        results = flann.nn_index(data[subject]['I'], numNeighbors, checks=params['checks'])
-        subj = {
-            'params': params,
-            'results': results
-        }
-        subjDBs.append(subj.copy())
+    print "Now building subject-subject mini databases..."
+    for i in xrange(len(subjList)-1):
+        results = []
+        for j in xrange(len(subjList[i+1:])):
+            print "i: " + str(i) + " j: " + str(j)
+            nodes, dist = flann.nn(data[i]['I'], data[j]['I'], numNeighbors, algorithm='kmeans')
+            # sort the results based on distance
+            dist, nodes = (list(t) for t in zip(*sorted(zip(dist.tolist(), nodes.tolist()))))
+            # save the numNodes number of distances and nodes
+            temp = {
+                "nodes": nodes[0:numNodes],
+                "distances": dist[0:numNodes]
+            }
+            results.append(temp)
+        subjDBs.append(results)
 
     print "Subject level databases complete!"
     return subjDBs
 
-subjTrees = buildSubjectTrees(data, 5)
+neighbors=5
+subjTrees = buildSubjectTrees(data, neighbors)
 
 # digression : http://www.theverge.com/google-deepmind
 
@@ -178,9 +203,9 @@ subjTrees = buildSubjectTrees(data, 5)
 
 # # interpretation
 # # isolate a subject tree
-# knnObj1 = subjTrees[0]
+# knnObj1 = subjTrees[0]['results']
 # # get its features
-# knnObj1.features_.make_stacked()
+# knnObj1.featureus_.make_stacked()
 # # collect features of all other trees
 # allSubjFeatures = subjTrees.features_.stacked_features
 # # not sure what this is
