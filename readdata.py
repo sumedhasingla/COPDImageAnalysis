@@ -165,7 +165,6 @@ def buildSubjectTrees(data, numNodes=3):
 
     """
     numNeighbors = 1 # how many nodes to compare the initial node to
-    numNodes = 3 # how many pairs to nodes to store for each bag
     flann = FLANN()
     subjDBs = []
     # build the tree for each subject
