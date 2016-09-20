@@ -172,7 +172,7 @@ def buildSubjectTrees(data, numNodes=3):
     for i in xrange(len(subjList)-1):
         results = []
         for j in xrange(len(subjList[i+1:])):
-            print "i: " + str(i) + " j: " + str(j)
+            # print "i: " + str(i) + " j: " + str(j)
             nodes, dist = flann.nn(data[i]['I'], data[j]['I'], numNeighbors, algorithm='kmeans')
             # sort the results based on distance
             dist, nodes = (list(t) for t in zip(*sorted(zip(dist.tolist(), nodes.tolist()))))
@@ -187,7 +187,7 @@ def buildSubjectTrees(data, numNodes=3):
     print "Subject level databases complete!"
     return subjDBs
 
-neighbors=5
+neighbors = 5
 subjTrees = buildSubjectTrees(data, neighbors)
 
 # digression : http://www.theverge.com/google-deepmind
