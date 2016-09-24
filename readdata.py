@@ -7,6 +7,7 @@ import pandas as pd
 import pickle as pk
 import shelve
 import h5py
+from joblib import Parallel, delayed  # conda install -c anaconda joblib=0.9.4
 from pyflann import *
 
 
@@ -75,24 +76,124 @@ def buildSubjectTrees(subjects, data, neighbors=5):
     subjDBs = []
     # build the tree for each subject
     print "Now building subject-subject mini databases..."
-    for i in xrange(len(subjects)-1):
-        results = []
-        for j in xrange(len(subjects[i+1:])):
-            # print "i: " + str(i) + " j: " + str(j)
-            nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
-            # save the numNodes number of distances and nodes
-            temp = {
-                "nodes": nodes,
-                "dists": dists
-            }
-            results.append(temp)
-        subjDBs.append(results)
+    # for i in xrange(len(subjects)-1):
+    # for i in xrange(2):  # for testing only
+        # results = []
+        # for j in xrange(len(subjects[i+1:])):
+        # # for j in xrange(3):  # for testing only
+        #     # print "i: " + str(i) + " j: " + str(j)
+        #     nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
+        #     # save the numNodes number of distances and nodes
+        #     temp = {
+        #         "nodes": nodes,
+        #         "dists": dists
+        #     }
+        #     results.append(temp)
+        # results = buildBranches(i, subjects, data, neighbors, flann)
+        # subjDBs.append(results)
+    # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
+    Parallel(n_jobs=1)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(2))
+    # Parallel(n_jobs=4)(subjDBs.append(buildBranches(i, subjects, data, neighbors)) for i in xrange(len(subjects)-1))
 
     print "Subject level databases complete!"
     return subjDBs
 
+def buildBranches(i, subjects, data, neighbors, flann):
+    """
+    Inner loop for buildSubjectTrees()
+
+    Inputs:
+    - i: current index to start at
+    - subjects: for determining how many items to iterate through
+    - data: data to cluster
+    - neighbors: the number of nearest nodes to save
+    - flann: from the containing function
+
+    Returns:
+    - results: a single branch of tree'ed data
+    """
+    results = []
+    # for j in xrange(len(subjects[i+1:])):
+    for j in xrange(3):  # for testing only
+        # print "i: " + str(i) + " j: " + str(j)
+        nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
+        # save the numNodes number of distances and nodes
+        temp = {
+            "nodes": nodes,
+            "dists": dists
+        }
+        results.append(temp)
+    return results
+
+
 neighbors = 5
 subjTrees = buildSubjectTrees(subjList, data, neighbors)
+
+
+def saveSubjectTrees(trees, fn):
+    """
+    Save the subject trees in an HDF5 file.
+
+    Inputs:
+    - trees: subject trees
+    - fn: filename to save to
+
+    Returns:
+    nothing
+    """
+    fn = fn + ".h5"
+    with h5py.File(fn, 'w') as hf:
+        # metadata storage
+        tableDims = [len(trees), len(trees[0])]
+        hf.create_dataset("metadata", tableDims, compression='gzip', compression_opts=7)
+        for i in xrange(len(trees)):
+            for j in xrange(len(trees[0])):
+                dsName = str(i).zfill(4)+"_"+str(j).zfill(4)
+                g = hf.create_group(dsName)
+                g.create_dataset("nodes", data=trees[i][j]['nodes'], compression='gzip', compression_opts=7)
+                g.create_dataset("dists", data=trees[i][j]['dists'], compression='gzip', compression_opts=7)
+
+
+fn = "subjTrees"
+saveSubjectTrees(subjTrees, fn)
+
+def loadSubjectTrees(fn):
+    """
+    Load the subject trees from an HDF5 file.
+
+    Inputs:
+    - fn: filename to load from 
+
+    Returns:
+    - trees: loaded subject trees
+    """
+    fn = fn + ".h5"
+
+    with h5py.File(fn, 'r') as hf:
+        print("List of arrays in this file: \n" + str(hf.keys()))
+        metadata = hf.get('metadata').shape
+        print metadata
+        trees = []
+        for i in xrange(metadata[0]):
+            branch = []
+            for j in xrange(metadata[1]):
+                # get the name of the group
+                dsName = str(i).zfill(4)+"_"+str(j).zfill(4)
+                # extract the group and the items from the groups
+                g = hf.get(dsName)
+                nodes = g.get("nodes")
+                dists = g.get("dists")
+                # put the items into the data structure
+                temp = {
+                    "nodes": np.array(nodes),
+                    "dists": np.array(dists)
+                }
+                branch.append(temp)
+            trees.append(branch)
+
+    return trees
+
+data = loadSubjectTrees(fn)
 
 # digression : http://www.theverge.com/google-deepmind
 
