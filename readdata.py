@@ -90,10 +90,10 @@ def buildSubjectTrees(subjects, data, neighbors=5):
         # results = buildBranches(i, subjects, data, neighbors, flann)
         # subjDBs.append(results)
     # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
-    Parallel(n_jobs=1)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(2))
-    # Parallel(n_jobs=4)(subjDBs.append(buildBranches(i, subjects, data, neighbors)) for i in xrange(len(subjects)-1))
+    subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
 
     print "Subject level databases complete!"
+    print subjDBs
     return subjDBs
 
 def buildBranches(i, subjects, data, neighbors, flann):
@@ -218,7 +218,7 @@ def loadSubjectTrees(fn):
 
 def main():
     """ Main function """
-        metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
+    metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
     neighbors = 5
     subjTrees = buildSubjectTrees(subjList, data, neighbors)
     fn = "subjTrees"
