@@ -42,8 +42,6 @@ def loadPickledData(useHarilick=False):
 
     return metaVoxelDict,subjList, phenotypeDB_clean, data
 
-metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
-
 # see data_looking.ipynb for structure information
 
 # READ/PLAY WITH DATA FIRST
@@ -126,9 +124,7 @@ def buildBranches(i, subjects, data, neighbors, flann):
     return results
 
 
-neighbors = 5
-subjTrees = buildSubjectTrees(subjList, data, neighbors)
-
+#----------------------------------- ^ trying to parallelize
 
 def saveSubjectTrees(trees, fn):
     """
@@ -153,9 +149,6 @@ def saveSubjectTrees(trees, fn):
                 g.create_dataset("nodes", data=trees[i][j]['nodes'], compression='gzip', compression_opts=7)
                 g.create_dataset("dists", data=trees[i][j]['dists'], compression='gzip', compression_opts=7)
 
-
-fn = "subjTrees"
-saveSubjectTrees(subjTrees, fn)
 
 def loadSubjectTrees(fn):
     """
@@ -193,8 +186,6 @@ def loadSubjectTrees(fn):
 
     return trees
 
-data = loadSubjectTrees(fn)
-
 # digression : http://www.theverge.com/google-deepmind
 
 #------------ NEXT STEP (WARNING: TAKE IT WITH HUGE GRAIN OF SALT)
@@ -225,3 +216,14 @@ data = loadSubjectTrees(fn)
 # We will try igraph to detect communities:
 # http://igraph.org/redirect.html
 
+def main():
+    """ Main function """
+        metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
+    neighbors = 5
+    subjTrees = buildSubjectTrees(subjList, data, neighbors)
+    fn = "subjTrees"
+    saveSubjectTrees(subjTrees, fn)
+    data = loadSubjectTrees(fn)
+
+if __name__ == '__main__':
+    main()
