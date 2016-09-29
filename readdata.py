@@ -29,17 +29,14 @@ def loadPickledData(useHarilick=False):
     phenotypeDB_clean = fid['phenotypeDB_clean']
     fid.close()
     print "Done !"
- 
     print "Sample of the metadata: "
     print "IDs of a few subjects : " , metaVoxelDict[0]['id']
     print "labelIndex of the meta data (a few elements): " , metaVoxelDict[0]['labelIndex'][1:10]   
-
     print "Reading pickle file ...."
     fid = open(pickleFn,'rb')
     data = pk.load(open(pickleFn,'rb'))
     fid.close()
     print "Done !"
-
     return metaVoxelDict,subjList, phenotypeDB_clean, data
 
 # see data_looking.ipynb for structure information
@@ -91,82 +88,9 @@ def buildSubjectTrees(subjects, data, neighbors=5):
         subjDBs.append(results)
     # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
     # subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
-
     print "Subject level databases complete!"
-    print subjDBs
+    # print subjDBs
     return subjDBs
-
-def buildSubjectTreesParallel(subjects, data, neighbors=5):
-    """
-    Find the numNodes nodes of each subject that are closest to N nodes
-    in every other subject.
-
-    Inputs:
-    - subjects: included for size (hackish programming)
-    - data: collection of data to be tree'ed
-    - neighbors: the number of nearest nodes to save
-
-    Returns:
-    - subjDBs: list of lists of dictionaries of lists
-        - first layer = first subject
-        - second layer = second subject
-        - third layer = dictionary accessed by keys
-        - "nodes": list of 
-
-    """
-    flann = FLANN()
-    subjDBs = []
-    # build the tree for each subject
-    print "Now building subject-subject mini databases..."
-    # for i in xrange(len(subjects)-1):
-    # for i in xrange(2):  # for testing only
-        # results = []
-        # for j in xrange(len(subjects[i+1:])):
-        # # for j in xrange(3):  # for testing only
-        #     # print "i: " + str(i) + " j: " + str(j)
-        #     nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
-        #     # save the numNodes number of distances and nodes
-        #     temp = {
-        #         "nodes": nodes,
-        #         "dists": dists
-        #     }
-        #     results.append(temp)
-        # results = buildBranches(i, subjects, data, neighbors, flann)
-        # subjDBs.append(results)
-    # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
-    subjDBs=Parallel(n_jobs=4)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
-
-    print "Subject level databases complete!"
-    print subjDBs
-    return subjDBs
-
-def buildBranches(i, subjects, data, neighbors, flann):
-    """
-    Inner loop for buildSubjectTrees()
-
-    Inputs:
-    - i: current index to start at
-    - subjects: for determining how many items to iterate through
-    - data: data to cluster
-    - neighbors: the number of nearest nodes to save
-    - flann: from the containing function
-
-    Returns:
-    - results: a single branch of tree'ed data
-    """
-    results = []
-    # for j in xrange(len(subjects[i+1:])):
-    for j in xrange(3):  # for testing only
-        # print "i: " + str(i) + " j: " + str(j)
-        nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
-        # save the numNodes number of distances and nodes
-        temp = {
-            "nodes": nodes,
-            "dists": dists
-        }
-        results.append(temp)
-    return results
-
 
 #----------------------------------- ^ trying to parallelize
 
@@ -181,6 +105,7 @@ def saveSubjectTrees(trees, fn):
     Returns:
     nothing
     """
+    print "Saving subject trees to HDF5 file..."
     fn = fn + ".h5"
     with h5py.File(fn, 'w') as hf:
         # metadata storage
@@ -192,6 +117,7 @@ def saveSubjectTrees(trees, fn):
                 g = hf.create_group(dsName)
                 g.create_dataset("nodes", data=trees[i][j]['nodes'], compression='gzip', compression_opts=7)
                 g.create_dataset("dists", data=trees[i][j]['dists'], compression='gzip', compression_opts=7)
+    print "Subject tree file saved!"
 
 
 def loadSubjectTrees(fn):
@@ -204,8 +130,8 @@ def loadSubjectTrees(fn):
     Returns:
     - trees: loaded subject trees
     """
+    print "Loading the subject trees..."
     fn = fn + ".h5"
-
     with h5py.File(fn, 'r') as hf:
         print("List of arrays in this file: \n" + str(hf.keys()))
         metadata = hf.get('metadata').shape
@@ -227,7 +153,7 @@ def loadSubjectTrees(fn):
                 }
                 branch.append(temp)
             trees.append(branch)
-
+    print "Trees loaded!"
     return trees
 
 # digression : http://www.theverge.com/google-deepmind
@@ -267,7 +193,7 @@ def main():
     subjTrees = buildSubjectTrees(subjList, data, neighbors)
     fn = "subjTrees"
     saveSubjectTrees(subjTrees, fn)
-    data = loadSubjectTrees(fn)
+    # data = loadSubjectTreess(fn)
 
 if __name__ == '__main__':
     main()
