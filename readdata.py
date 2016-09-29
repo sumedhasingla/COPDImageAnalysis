@@ -75,6 +75,50 @@ def buildSubjectTrees(subjects, data, neighbors=5):
     # build the tree for each subject
     print "Now building subject-subject mini databases..."
     # for i in xrange(len(subjects)-1):
+    for i in xrange(20):  # for testing only
+        results = []
+        # for j in xrange(len(subjects[i+1:])):
+        for j in xrange(20):  # for testing only
+            # print "i: " + str(i) + " j: " + str(j)
+            nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
+            # save the numNodes number of distances and nodes
+            temp = {
+                "nodes": nodes,
+                "dists": dists
+            }
+            results.append(temp)
+        results = buildBranches(i, subjects, data, neighbors, flann)
+        subjDBs.append(results)
+    # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
+    # subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
+
+    print "Subject level databases complete!"
+    print subjDBs
+    return subjDBs
+
+def buildSubjectTreesParallel(subjects, data, neighbors=5):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - subjects: included for size (hackish programming)
+    - data: collection of data to be tree'ed
+    - neighbors: the number of nearest nodes to save
+
+    Returns:
+    - subjDBs: list of lists of dictionaries of lists
+        - first layer = first subject
+        - second layer = second subject
+        - third layer = dictionary accessed by keys
+        - "nodes": list of 
+
+    """
+    flann = FLANN()
+    subjDBs = []
+    # build the tree for each subject
+    print "Now building subject-subject mini databases..."
+    # for i in xrange(len(subjects)-1):
     # for i in xrange(2):  # for testing only
         # results = []
         # for j in xrange(len(subjects[i+1:])):
@@ -90,7 +134,7 @@ def buildSubjectTrees(subjects, data, neighbors=5):
         # results = buildBranches(i, subjects, data, neighbors, flann)
         # subjDBs.append(results)
     # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
-    subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
+    subjDBs=Parallel(n_jobs=4)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
 
     print "Subject level databases complete!"
     print subjDBs
