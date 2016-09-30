@@ -72,19 +72,21 @@ def buildSubjectTrees(subjects, data, neighbors=5):
     # build the tree for each subject
     print "Now building subject-subject mini databases..."
     # for i in xrange(len(subjects)-1):
-    for i in xrange(20):  # for testing only
+    for i in xrange(1):  # for testing only
         results = []
+        flann.build_index(data[i]['I'])
         # for j in xrange(len(subjects[i+1:])):
-        for j in xrange(20):  # for testing only
+        for j in xrange(len(subjects)):  # for testing only
             # print "i: " + str(i) + " j: " + str(j)
-            nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
+            # nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
+            nodes, dists = flann.nn_index(data[j]['I'], neighbors, algorithm='kmeans')
             # save the numNodes number of distances and nodes
             temp = {
                 "nodes": nodes,
                 "dists": dists
             }
             results.append(temp)
-        results = buildBranches(i, subjects, data, neighbors, flann)
+        # results = buildBranches(i, subjects, data, neighbors, flann)
         subjDBs.append(results)
     # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
     # subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
