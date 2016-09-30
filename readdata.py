@@ -8,7 +8,7 @@ import pickle as pk
 import shelve
 import h5py
 from joblib import Parallel, delayed  # conda install -c anaconda joblib=0.9.4
-from pyflann import *
+from cyflann import *
 
 
 # this is a helper function to set the configuration
@@ -67,7 +67,7 @@ def buildSubjectTrees(subjects, data, neighbors=5):
         - "nodes": list of 
 
     """
-    flann = FLANN()
+    flann = FLANNIndex()
     subjDBs = []
     # build the tree for each subject
     print "Now building subject-subject mini databases..."
@@ -77,7 +77,6 @@ def buildSubjectTrees(subjects, data, neighbors=5):
         flann.build_index(data[i]['I'])
         # for j in xrange(len(subjects[i+1:])):
         for j in xrange(len(subjects)):  # for testing only
-            # print "i: " + str(i) + " j: " + str(j)
             # nodes, dists = flann.nn(data[i]['I'], data[j]['I'], neighbors, algorithm='kmeans')
             nodes, dists = flann.nn_index(data[j]['I'], neighbors, algorithm='kmeans')
             # save the numNodes number of distances and nodes
@@ -86,15 +85,79 @@ def buildSubjectTrees(subjects, data, neighbors=5):
                 "dists": dists
             }
             results.append(temp)
-        # results = buildBranches(i, subjects, data, neighbors, flann)
         subjDBs.append(results)
-    # [subjDBs.append(buildBranches(i, subjects, data, neighbors, flann)) for i in xrange(2)]
-    # subjDBs=Parallel(n_jobs=6)(delayed(buildBranches)(i, subjects, data, neighbors, flann) for i in xrange(8))
     print "Subject level databases complete!"
     # print subjDBs
     return subjDBs
 
-#----------------------------------- ^ trying to parallelize
+#---------------------------------------------------------------------------------
+# Attempt at Parallelization, v2
+#---------------------------------------------------------------------------------
+
+def buildSubjectTreesParallel(subjects, data, jobs, neighbors=5):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - subjects: included for size (hackish programming)
+    - data: collection of data to be tree'ed
+    - jobs: number of jobs to run
+    - neighbors: the number of nearest nodes to save
+
+    Returns:
+    - subjDBs: list of lists of dictionaries of lists
+        - first layer = first subject
+        - second layer = second subject
+        - third layer = dictionary accessed by keys
+        - "nodes": list of 
+
+    """
+    flann = FLANNIndex()
+    subjDBs = []
+    # build the tree for each subject
+    print "Now building subject-subject mini databases..."
+    listLen = len(subjects)
+    subjDBs=Parallel(n_jobs=jobs, backend='threading')(
+        delayed(buildSubjectBranch)(i, listLen, data, neighbors, flann) for i in xrange(4))
+    print "Subject level databases complete!"
+    # print subjDBs
+    return subjDBs
+
+def buildSubjectBranch(subj, listLen, data, neighbors, flann):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - subj: index of the subject being database'd
+    - listLen: length of the list of subjects
+    - data: collection of data to be tree'ed
+    - neighbors: the number of nearest nodes to save
+    - flann: from the containing function
+
+    Returns:
+    - a single branch of the tree'ed data
+    """
+    results = []
+    # build the tree for a subject
+    # print "Now building subject-subject mini databases..."
+    flann.build_index(data[subj]['I'])
+    for j in xrange(listLen):
+    # for j in xrange(100):  # for testing only
+        nodes, dists = flann.nn_index(data[j]['I'], neighbors)
+        # save the numNodes number of distances and nodes
+        temp = {
+            "nodes": nodes,
+            "dists": dists
+        }
+        results.append(temp)
+    # print "Subject level databases complete!"
+    return results
+
+#--------------------------------------------------------------------------------
+# Save and load database data
+#--------------------------------------------------------------------------------
 
 def saveSubjectTrees(trees, fn):
     """
@@ -135,9 +198,9 @@ def loadSubjectTrees(fn):
     print "Loading the subject trees..."
     fn = fn + ".h5"
     with h5py.File(fn, 'r') as hf:
-        print("List of arrays in this file: \n" + str(hf.keys()))
+        # print("List of arrays in this file: \n" + str(hf.keys()))
         metadata = hf.get('metadata').shape
-        print metadata
+        # print metadata
         trees = []
         for i in xrange(metadata[0]):
             branch = []
@@ -188,14 +251,16 @@ def loadSubjectTrees(fn):
 # We will try igraph to detect communities:
 # http://igraph.org/redirect.html
 
-def main():
-    """ Main function """
-    metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
-    neighbors = 5
-    subjTrees = buildSubjectTrees(subjList, data, neighbors)
-    fn = "subjTrees"
-    saveSubjectTrees(subjTrees, fn)
-    # data = loadSubjectTreess(fn)
+# def main():
+    # Main function
+metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
+neighbors = 5
+jobs = 2
+# subjTrees = buildSubjectTrees(subjList, data, neighbors)
+subjTrees = buildSubjectTreesParallel(subjList, data, jobs, neighbors)
+fn = "subjTrees"
+saveSubjectTrees(subjTrees, fn)
+data2 = loadSubjectTrees(fn)
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
