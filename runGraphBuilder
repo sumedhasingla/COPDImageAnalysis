@@ -1,0 +1,10 @@
+#!/bin/bash
+CORES=2
+NEIGHBORS=5
+
+for i in {0..7191} ; do
+    JOBNAME="build-graph-subject-${i}"
+    OUTFN="/pylon1/ms4s88p/jms565/stdout-logs/out${i}.log"
+    ERRFN="/pylon1/ms4s88p/jms565/stderr-logs/err${i}.log"
+    echo sbatch  -o "${OUTFN}"  -e "${ERRFN}" --job-name "${JOBNAME}" slurmLauncher.sh ./buildGraphSingleSubjectCy.py -n "${CORES}" -k "${NEIGHBORS}" -c "${i}"
+done
