@@ -11,16 +11,18 @@ from joblib import Parallel, delayed  # conda install -c anaconda joblib=0.9.4
 from cyflann import *
 
 
-# this is a helper function to set the configuration
 def loadPickledData(useHarilick=False):     
-   
-    pickleFn =  'COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
     # pickleFn =  '%(pickleRootFolder)s/%(pickleSettingName)s/%(pickleSettingName)s.data.p'%\
-            # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
+        # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
+    # pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
+    # shelveFn = '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.shelve'
+
+    # desktop or laptop or home
+    pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
     shelveFn = 'COPDGene_pickleFiles/histFHOG_largeRange_setting1.shelve'
     print "pickleFn : ", pickleFn
     print "shelveFn :", shelveFn
-        
+    
     # reading pickle and shelve files
     print "Reading the shelve file ..."
     fid = shelve.open(shelveFn,'r')
@@ -49,14 +51,14 @@ def loadPickledData(useHarilick=False):
 #  https://github.com/primetang/pyflann
 #  https://github.com/dougalsutherland/cyflann
 
-def buildSubjectTrees(subjects, data, neighbors=5):
+def buildSubjectGraphs(subjects, data, neighbors=5):
     """
     Find the numNodes nodes of each subject that are closest to N nodes
     in every other subject.
 
     Inputs:
     - subjects: included for size (hackish programming)
-    - data: collection of data to be tree'ed
+    - data: collection of data to be graph'ed
     - neighbors: the number of nearest nodes to save
 
     Returns:
@@ -69,7 +71,7 @@ def buildSubjectTrees(subjects, data, neighbors=5):
     """
     flann = FLANNIndex()
     subjDBs = []
-    # build the tree for each subject
+    # build the graph for each subject
     print "Now building subject-subject mini databases..."
     # for i in xrange(len(subjects)-1):
     for i in xrange(1):  # for testing only
@@ -94,15 +96,42 @@ def buildSubjectTrees(subjects, data, neighbors=5):
 # Attempt at Parallelization, v2
 #---------------------------------------------------------------------------------
 
-def buildSubjectTreesParallel(subjects, data, jobs, neighbors=5):
+def buildSubjectGraphsParallel(data, jobs, neighbors=5):
     """
     Find the numNodes nodes of each subject that are closest to N nodes
     in every other subject.
 
     Inputs:
     - subjects: included for size (hackish programming)
-    - data: collection of data to be tree'ed
+    - data: collection of data to be graph'ed
     - jobs: number of jobs to run
+    - neighbors: the number of nearest nodes to save
+
+    Returns:
+    - subjGraphs: list of lists of dictionaries of lists
+        - first layer = first subject
+        - second layer = second subject
+        - third layer = dictionary accessed by keys
+        - "nodes": list of 
+
+    """
+    subjGraphs = []
+    # build the graph for each subject
+    print "Now building subject-subject mini databases..."
+    subjGraphs=Parallel(n_jobs=jobs, backend='threading')(
+        delayed(buildSubjectGraph)(i, data, neighbors) for i in xrange(3)) # len(data[0])))
+    print "Subject level databases complete!"
+    # print subjDBs
+    return subjGraphs
+
+def buildSubjectGraph(subj, data, neighbors=5):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - subj: index of the subject being database'd
+    - data: collection of data to be graph'ed
     - neighbors: the number of nearest nodes to save
 
     Returns:
@@ -110,116 +139,94 @@ def buildSubjectTreesParallel(subjects, data, jobs, neighbors=5):
         - first layer = first subject
         - second layer = second subject
         - third layer = dictionary accessed by keys
-        - "nodes": list of 
-
+        - "nodes": list of N nearest nodes
+        - "dists": list of dists for N nearest nodes
     """
     flann = FLANNIndex()
-    subjDBs = []
-    # build the tree for each subject
+    subjDB = []
+    # vectorize data
+    rowLengths = [ s['I'].shape[0] for s in data ]
+    X = np.vstack( [ s['I'] for s in data] )
+    # build the graph for a subject
     print "Now building subject-subject mini databases..."
-    listLen = len(subjects)
-    subjDBs=Parallel(n_jobs=jobs, backend='threading')(
-        delayed(buildSubjectBranch)(i, listLen, data, neighbors, flann) for i in xrange(4))
-    print "Subject level databases complete!"
-    # print subjDBs
-    return subjDBs
-
-def buildSubjectBranch(subj, listLen, data, neighbors, flann):
-    """
-    Find the numNodes nodes of each subject that are closest to N nodes
-    in every other subject.
-
-    Inputs:
-    - subj: index of the subject being database'd
-    - listLen: length of the list of subjects
-    - data: collection of data to be tree'ed
-    - neighbors: the number of nearest nodes to save
-    - flann: from the containing function
-
-    Returns:
-    - a single branch of the tree'ed data
-    """
-    results = []
-    # build the tree for a subject
-    # print "Now building subject-subject mini databases..."
     flann.build_index(data[subj]['I'])
-    for j in xrange(listLen):
-    # for j in xrange(100):  # for testing only
-        nodes, dists = flann.nn_index(data[j]['I'], neighbors)
+    nodes, dists = flann.nn_index(X, neighbors)
+    # decode the results
+    idx = 0
+    for i in rowLengths:
         # save the numNodes number of distances and nodes
         temp = {
-            "nodes": nodes,
-            "dists": dists
+            "nodes": nodes[idx:idx+i],
+            "dists": dists[idx:idx+i]
         }
-        results.append(temp)
-    # print "Subject level databases complete!"
-    return results
+        idx = idx + i
+        subjDB.append(temp)
+    print "Subject level databases complete!"
+    return subjDB
 
 #--------------------------------------------------------------------------------
 # Save and load database data
 #--------------------------------------------------------------------------------
 
-def saveSubjectTrees(trees, fn):
+def saveSubjectGraphs(graphs, fn):
     """
-    Save the subject trees in an HDF5 file.
+    Save the subject graphs in an HDF5 file.
 
     Inputs:
-    - trees: subject trees
+    - graphs: subject graphs
     - fn: filename to save to
 
     Returns:
     nothing
     """
-    print "Saving subject trees to HDF5 file..."
+    print "Saving subject graphs to HDF5 file..."
+    # print "len(graphs): " + str(len(graphs))
     fn = fn + ".h5"
     with h5py.File(fn, 'w') as hf:
         # metadata storage
-        tableDims = [len(trees), len(trees[0])]
-        hf.create_dataset("metadata", tableDims, compression='gzip', compression_opts=7)
-        for i in xrange(len(trees)):
-            for j in xrange(len(trees[0])):
-                dsName = str(i).zfill(4)+"_"+str(j).zfill(4)
-                g = hf.create_group(dsName)
-                g.create_dataset("nodes", data=trees[i][j]['nodes'], compression='gzip', compression_opts=7)
-                g.create_dataset("dists", data=trees[i][j]['dists'], compression='gzip', compression_opts=7)
-    print "Subject tree file saved!"
+        # print "dimensions of the table: " + str(len(graphs))
+        hf.create_dataset("metadata", [len(graphs)], compression='gzip', compression_opts=7)
+        for j in xrange(len(graphs)):
+            # print "    current j: " + str(j)
+            dsName = str(j).zfill(4)
+            g = hf.create_group(dsName)
+            g.create_dataset("nodes", data=graphs[j]['nodes'], compression='gzip', compression_opts=7)
+            g.create_dataset("dists", data=graphs[j]['dists'], compression='gzip', compression_opts=7)
+    print "Subject graph file saved!"
 
 
-def loadSubjectTrees(fn):
+def loadSubjectGraph(fn):
     """
-    Load the subject trees from an HDF5 file.
+    Load the subject graphs from an HDF5 file.
 
     Inputs:
     - fn: filename to load from 
 
     Returns:
-    - trees: loaded subject trees
+    - graphs: loaded subject graphs
     """
-    print "Loading the subject trees..."
+    print "Loading the subject graph..."
     fn = fn + ".h5"
     with h5py.File(fn, 'r') as hf:
         # print("List of arrays in this file: \n" + str(hf.keys()))
         metadata = hf.get('metadata').shape
-        # print metadata
-        trees = []
-        for i in xrange(metadata[0]):
-            branch = []
-            for j in xrange(metadata[1]):
-                # get the name of the group
-                dsName = str(i).zfill(4)+"_"+str(j).zfill(4)
-                # extract the group and the items from the groups
-                g = hf.get(dsName)
-                nodes = g.get("nodes")
-                dists = g.get("dists")
-                # put the items into the data structure
-                temp = {
-                    "nodes": np.array(nodes),
-                    "dists": np.array(dists)
-                }
-                branch.append(temp)
-            trees.append(branch)
-    print "Trees loaded!"
-    return trees
+        print metadata
+        graph = []
+        for j in xrange(metadata[0]):
+            # get the name of the group
+            dsName = str(j).zfill(4)
+            # extract the group and the items from the groups
+            g = hf.get(dsName)
+            nodes = g.get("nodes")
+            dists = g.get("dists")
+            # put the items into the data structure
+            temp = {
+                "nodes": np.array(nodes),
+                "dists": np.array(dists)
+            }
+            graph.append(temp)
+    print "Graph loaded!"
+    return graph
 
 # digression : http://www.theverge.com/google-deepmind
 
@@ -232,15 +239,15 @@ def loadSubjectTrees(fn):
 # obs_knnDist = obs_knnObj.nn_index(X_feats_Jenna, 3)[1][:,2]
 
 # # interpretation
-# # isolate a subject tree
-# knnObj1 = subjTrees[0]['results']
+# # isolate a subject graph
+# knnObj1 = subjGraphs[0]['results']
 # # get its features
 # knnObj1.featureus_.make_stacked()
-# # collect features of all other trees
-# allSubjFeatures = subjTrees.features_.stacked_features
+# # collect features of all other graphs
+# allSubjFeatures = subjGraphs.features_.stacked_features
 # # not sure what this is
 # indices = knnObj1.nn_index(allSubjFeatures, 3)[0][:, 2]
-# distances = subjTrees.nn_index(allSubjFeatures, 3)[1][:, 2]
+# distances = subjGraphs.nn_index(allSubjFeatures, 3)[1][:, 2]
 
 
 # -------------------------------
@@ -256,11 +263,10 @@ def loadSubjectTrees(fn):
 metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
 neighbors = 5
 jobs = 2
-# subjTrees = buildSubjectTrees(subjList, data, neighbors)
-subjTrees = buildSubjectTreesParallel(subjList, data, jobs, neighbors)
-fn = "subjTrees"
-saveSubjectTrees(subjTrees, fn)
-data2 = loadSubjectTrees(fn)
+subjGraphs = buildSubjectGraphsParallel(data, jobs, neighbors)
+fn = "subjGraphs"
+saveSubjectGraphs(subjGraphs, fn)
+data2 = loadSubjectGraphs(fn)
 
 # if __name__ == '__main__':
 #     main()

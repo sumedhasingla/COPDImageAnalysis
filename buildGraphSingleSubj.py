@@ -47,14 +47,14 @@ def loadPickledData(useHarilick=False):
     return metaVoxelDict,subjList, phenotypeDB_clean, data
 
 
-def buildSubjectTree(subj, data, neighbors=5):
+def buildSubjectGraph(subj, data, neighbors=5):
     """
     Find the numNodes nodes of each subject that are closest to N nodes
     in every other subject.
 
     Inputs:
     - subj: index of the subject being database'd
-    - data: collection of data to be tree'ed
+    - data: collection of data to be graph'ed
     - neighbors: the number of nearest nodes to save
 
     Returns:
@@ -70,7 +70,7 @@ def buildSubjectTree(subj, data, neighbors=5):
     # vectorize data
     rowLengths = [ s['I'].shape[0] for s in data ]
     X = np.vstack( [ s['I'] for s in data] )
-    # build the tree for a subject
+    # build the graph for a subject
     print "Now building subject-subject mini databases..."
     flann.build_index(data[subj]['I'])
     nodes, dists = flann.nn_index(X, neighbors)
@@ -89,50 +89,50 @@ def buildSubjectTree(subj, data, neighbors=5):
 
 #----------------------------------- ^ trying to parallelize
 
-def saveSubjectTree(trees, fn):
+def saveSubjectGraph(graphs, fn):
     """
-    Save the subject trees in an HDF5 file.
+    Save the subject graphs in an HDF5 file.
 
     Inputs:
-    - trees: subject trees
+    - graphs: subject graphs
     - fn: filename to save to
 
     Returns:
     nothing
     """
-    print "Saving subject trees to HDF5 file..."
-    # print "len(trees): " + str(len(trees))
+    print "Saving subject graphs to HDF5 file..."
+    # print "len(graphs): " + str(len(graphs))
     fn = fn + ".h5"
     with h5py.File(fn, 'w') as hf:
         # metadata storage
-        # print "dimensions of the table: " + str(len(trees))
-        hf.create_dataset("metadata", [len(trees)], compression='gzip', compression_opts=7)
-        for j in xrange(len(trees)):
+        # print "dimensions of the table: " + str(len(graphs))
+        hf.create_dataset("metadata", [len(graphs)], compression='gzip', compression_opts=7)
+        for j in xrange(len(graphs)):
             # print "    current j: " + str(j)
             dsName = str(j).zfill(4)
             g = hf.create_group(dsName)
-            g.create_dataset("nodes", data=trees[j]['nodes'], compression='gzip', compression_opts=7)
-            g.create_dataset("dists", data=trees[j]['dists'], compression='gzip', compression_opts=7)
-    print "Subject tree file saved!"
+            g.create_dataset("nodes", data=graphs[j]['nodes'], compression='gzip', compression_opts=7)
+            g.create_dataset("dists", data=graphs[j]['dists'], compression='gzip', compression_opts=7)
+    print "Subject graph file saved!"
 
 
-def loadSubjectTree(fn):
+def loadSubjectGraph(fn):
     """
-    Load the subject trees from an HDF5 file.
+    Load the subject graphs from an HDF5 file.
 
     Inputs:
     - fn: filename to load from 
 
     Returns:
-    - trees: loaded subject trees
+    - graphs: loaded subject graphs
     """
-    print "Loading the subject tree..."
+    print "Loading the subject graph..."
     fn = fn + ".h5"
     with h5py.File(fn, 'r') as hf:
         # print("List of arrays in this file: \n" + str(hf.keys()))
         metadata = hf.get('metadata').shape
         print metadata
-        tree = []
+        graph = []
         for j in xrange(metadata[0]):
             # get the name of the group
             dsName = str(j).zfill(4)
@@ -145,9 +145,9 @@ def loadSubjectTree(fn):
                 "nodes": np.array(nodes),
                 "dists": np.array(dists)
             }
-            tree.append(temp)
-    print "Tree loaded!"
-    return tree
+            graph.append(temp)
+    print "Graph loaded!"
+    return graph
 
 
 # def main():
@@ -165,14 +165,14 @@ args = parser.parse_args()
 
 # Actually do things
 metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
-# subjTree = buildSubjectTree(args.subject, subjList, data, args.neighbors)
+# subjGraph = buildSubjectGraph(args.subject, subjList, data, args.neighbors)
 print "About to start building the graphs in parallel..."
-subjTree = Parallel(n_jobs=args.cores)(delayed(buildSubjectTree)(args.subject, data, args.neighbors) for i in xrange(1))
+subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data, args.neighbors) for i in xrange(1))
 print "Finished buliding the graphs!"
 fn = "test_results/"+str(args.subject).zfill(4)
 # fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
-saveSubjectTree(subjTree[0], fn)
-data2 = loadSubjectTree(fn)
+saveSubjectGraph(subjGraph[0], fn)
+data2 = loadSubjectGraph(fn)
 
 #if __name__ == "__main__":
 #    main()
