@@ -17,6 +17,8 @@ def loadPickledData(useHarilick=False):
 
     # pickleFn =  '%(pickleRootFolder)s/%(pickleSettingName)s/%(pickleSettingName)s.data.p'%\
         # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
+
+    # On Bridges for job
     # pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
     # shelveFn = '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.shelve'
 
@@ -99,12 +101,14 @@ def saveSubjectTree(trees, fn):
     nothing
     """
     print "Saving subject trees to HDF5 file..."
+    # print "len(trees): " + str(len(trees))
     fn = fn + ".h5"
     with h5py.File(fn, 'w') as hf:
         # metadata storage
-        tableDims = [len(trees), len(trees[0])]
-        hf.create_dataset("metadata", tableDims, compression='gzip', compression_opts=7)
+        # print "dimensions of the table: " + str(len(trees))
+        hf.create_dataset("metadata", [len(trees)], compression='gzip', compression_opts=7)
         for j in xrange(len(trees)):
+            # print "    current j: " + str(j)
             dsName = str(j).zfill(4)
             g = hf.create_group(dsName)
             g.create_dataset("nodes", data=trees[j]['nodes'], compression='gzip', compression_opts=7)
@@ -127,9 +131,9 @@ def loadSubjectTree(fn):
     with h5py.File(fn, 'r') as hf:
         # print("List of arrays in this file: \n" + str(hf.keys()))
         metadata = hf.get('metadata').shape
-        # print metadata
+        print metadata
         tree = []
-        for j in xrange(metadata[1]):
+        for j in xrange(metadata[0]):
             # get the name of the group
             dsName = str(j).zfill(4)
             # extract the group and the items from the groups
@@ -146,26 +150,29 @@ def loadSubjectTree(fn):
     return tree
 
 
-def main():
-    # Argument parsing stuff
-    parser = argparse.ArgumentParser()
-    # Adding arguments to parse
-    parser.add_argument("-n", "--neighbors", help="the number of nearest neighbors", type=int, default=5)
-    parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
-    parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=1)
-    # parser.add_argument("-f", "--filepath", help="the file path for the output file")
-    # Parsing the arguments
-    args = parser.parse_args()
+# def main():
+# Argument parsing stuff
+parser = argparse.ArgumentParser()
+# Adding arguments to parse
+parser.add_argument("-n", "--neighbors", help="the number of nearest neighbors", type=int, default=5)
+parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
+parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=1)
+# parser.add_argument("-f", "--filepath", help="the file path for the output file")
+# Parsing the arguments
+args = parser.parse_args()
 
-    # grapher = buildGraphs()
+# grapher = buildGraphs()
 
-    # Actually do things
-    metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
-    # subjTree = buildSubjectTree(args.subject, subjList, data, args.neighbors)
-    subjTree = Parallel(n_jobs=args.cores)(delayed(buildSubjectTree)(args.subject, data, args.neighbors) for i in xrange(1))
-    fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
-    saveSubjectTree(subjTree[0], fn)
-    # data2 = loadSubjectTree(fn)
+# Actually do things
+metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
+# subjTree = buildSubjectTree(args.subject, subjList, data, args.neighbors)
+print "About to start building the graphs in parallel..."
+subjTree = Parallel(n_jobs=args.cores)(delayed(buildSubjectTree)(args.subject, data, args.neighbors) for i in xrange(1))
+print "Finished buliding the graphs!"
+fn = "test_results/"+str(args.subject).zfill(4)
+# fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
+saveSubjectTree(subjTree[0], fn)
+data2 = loadSubjectTree(fn)
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()
