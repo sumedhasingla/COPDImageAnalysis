@@ -24,10 +24,10 @@ def loadPickledData():
         # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
 
     # On Bridges for job
-    # pickleFn =  '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
+    pickleFn =  '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
 
     # desktop or laptop or home
-    pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
+    # pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
     print "pickleFn : ", pickleFn
     
     # reading pickle file
@@ -179,17 +179,17 @@ def compileGraphAllSubj(superMetaData, numSimNodes=5 ):
     """
     # set up initial graph:
     fn = str(0).zfill(4)
-    # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
-    subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
+    subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+    # subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
     # compileGraphSingleSubj()
     sparseGraph = compileGraphSingleSubj(subjGraph, superMetaData, 0, numSimNodes=3)
 
     # for each subject
-    # for s in xrange(len(superMetaData["subjectSuperPixels"])-1):
-    for s in xrange(1):
+    for s in xrange(len(superMetaData["subjectSuperPixels"])-1):
+    # for s in xrange(1):
         fn = str(s+1).zfill(4)
-        # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
-        subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
+        subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+        # subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
         # compileGraphSingleSubj()
         sparseSubjI = compileGraphSingleSubj(subjGraph, superMetaData, s+1, numSimNodes=3)
         sparseGraph = sp.hstack((sparseGraph, sparseSubjI), format='csr')
@@ -248,8 +248,8 @@ superMetaData = getSubjectSizes()
 simNodes = 3
 sparseGraph = compileGraphAllSubj(superMetaData, numSimNodes=simNodes)
 # Save the compiled graph
-# outFN = "/pylon2/ms4s88p/jms565/compiledSparseGraph"
-outFN = "compiledSparseGraph"
+outFN = "/pylon2/ms4s88p/jms565/compiledSparseGraph"
+# outFN = "compiledSparseGraph"
 
 saveSparseGraph(sparseGraph, outFN)
 
