@@ -24,7 +24,7 @@ def loadPickledData():
         # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
 
     # On Bridges for job
-    pickleFn =  '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
+    pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
 
     # desktop or laptop or home
     # pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
@@ -179,7 +179,7 @@ def compileGraphAllSubj(superMetaData, numSimNodes=5 ):
     """
     # set up initial graph:
     fn = str(0).zfill(4)
-    subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+    subjGraph = loadSubjectGraph("/pylon1/ms4s88p/jms565/subjectGraphs/"+fn)
     # subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
     # compileGraphSingleSubj()
     sparseGraph = compileGraphSingleSubj(subjGraph, superMetaData, 0, numSimNodes=3)
@@ -188,7 +188,7 @@ def compileGraphAllSubj(superMetaData, numSimNodes=5 ):
     for s in xrange(len(superMetaData["subjectSuperPixels"])-1):
     # for s in xrange(1):
         fn = str(s+1).zfill(4)
-        subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+        subjGraph = loadSubjectGraph("/pylon1/ms4s88p/jms565/subjectGraphs/"+fn)
         # subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
         # compileGraphSingleSubj()
         sparseSubjI = compileGraphSingleSubj(subjGraph, superMetaData, s+1, numSimNodes=3)
