@@ -11,6 +11,12 @@ import h5py
 from joblib import Parallel, delayed  # conda install -c anaconda joblib=0.9.4
 from cyflann import *
 import argparse
+import scipy.sparse as sp
+from scipy import *
+
+#--------------------------------------------------------------------------
+# Saving/Loading Single Graphs, etc.
+#--------------------------------------------------------------------------
 
 def loadPickledData():     
 
@@ -18,32 +24,19 @@ def loadPickledData():
         # {'pickleSettingName':pickleSettingName, 'pickleRootFolder':pickleRootFolder}
 
     # On Bridges for job
-    # pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
-    # shelveFn = '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.shelve'
+    # pickleFn =  '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
 
     # desktop or laptop or home
     pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
-    shelveFn = 'COPDGene_pickleFiles/histFHOG_largeRange_setting1.shelve'
     print "pickleFn : ", pickleFn
-    print "shelveFn :", shelveFn
     
-    # reading pickle and shelve files
-    print "Reading the shelve file ..."
-    fid = shelve.open(shelveFn,'r')
-    metaVoxelDict = fid['metaVoxelDict']
-    subjList = fid['subjList']
-    phenotypeDB_clean = fid['phenotypeDB_clean']
-    fid.close()
-    print "Done !"
-    print "Sample of the metadata: "
-    print "IDs of a few subjects : " , metaVoxelDict[0]['id']
-    print "labelIndex of the meta data (a few elements): " , metaVoxelDict[0]['labelIndex'][1:10]   
+    # reading pickle file
     print "Reading pickle file ...."
     fid = open(pickleFn,'rb')
     data = pk.load(open(pickleFn,'rb'))
     fid.close()
     print "Done !"
-    return metaVoxelDict,subjList, phenotypeDB_clean, data
+    return data
 
 
 def loadSubjectGraph(fn):
@@ -79,6 +72,9 @@ def loadSubjectGraph(fn):
     print "Graph loaded!"
     return graph
 
+#--------------------------------------------------------------------------
+# Building Complete Sparse Graph
+#--------------------------------------------------------------------------
 
 def getSubjectSizes():
     """
@@ -96,7 +92,7 @@ def getSubjectSizes():
         - superPixelIndexingEnd: the index indicating the end of each subject
     """
     # read data from original files
-    metaVoxelDict, subjList, phenotypeDB_clean, data = loadPickledData()
+    data = loadPickledData()
     # look at size of each file
     numSubjSuperPixels = [ len(s['I']) for s in data ]
     totalSuperPixels = sum(numSubjSuperPixels)
@@ -140,27 +136,34 @@ def compileGraphSingleSubj(subjGraph, superMetaData, subjIdx, numSimNodes=5):
     Returns:
     """
     # Uses the superMetaData, subjIdx, numSimNodes
-    subjIdx = 0
-    numSimNodes = 5
-    # set up matrix: number of elements in DB subject x total number of elements in query subjects
     numSubjPix = superMetaData["subjectSuperPixels"][subjIdx]
-    singleSubjGraph = np.zeros((numSubjPix, superMetaData["totalSuperPixels"]))
-    # for each query subject in the h5 file
-    for j in xrange(1):
-        for k in xrange(len(subjGraph[j]["nodes"])):
-            # get 3 closest distances 
-            nodes = subjGraph[j]["nodes"][k][0:numSimNodes]
-            dists = subjGraph[j]["dists"][k][0:numSimNodes]
-            # put dists at the location (db subj node, query subj nodes)
-            shiftedK = int(superMetaData["superPixelIndexingStart"][j]+k)
-            for i in xrange(numSimNodes):
-                singleSubjGraph[nodes[i]][shiftedK] = dists[i]
-    # * make sure to adjust the query subj nodes wrt the offset from the prev subjs
-    print "Finished building this graph"
-    return singleSubjGraph
+
+    # set up initial sparse matrix
+    subjJShape = (superMetaData["subjectSuperPixels"][0], numSubjPix)
+    # get 3 closest distances for all elements in subj
+    cols = subjGraph[0]["nodes"][:, 0:numSimNodes] 
+    dists = subjGraph[0]["dists"][:, 0:numSimNodes]
+    rows = np.matrix([[i] * numSimNodes for i in xrange(superMetaData["subjectSuperPixels"][0])])
+    # make sparse matrix here
+    sparseSubj = sp.csr_matrix( (list(dists.flat),(list(rows.flat), list(cols.flat))), shape=subjJShape)
+
+    # for each query subject in the h5 file for one db subject
+    for j in xrange(len(subjGraph)-1):
+        subjJShape = (superMetaData["subjectSuperPixels"][j+1], numSubjPix)
+        # get 3 closest distances 
+        cols = subjGraph[j+1]["nodes"][:, 0:numSimNodes] 
+        dists = subjGraph[j+1]["dists"][:, 0:numSimNodes]
+        rows = np.matrix([[i] * numSimNodes for i in xrange(superMetaData["subjectSuperPixels"][j+1])])
+        # make sparse matrix here
+        sparseJ = sp.csr_matrix( (list(dists.flat),(list(rows.flat), list(cols.flat))), shape=subjJShape)
+        # concatenate w/ row matrix?
+        sparseSubj = sp.vstack((sparseSubj, sparseJ), format='csr')
+        
+    print "Finished building single graph for DB subject " + str(subjIdx) + "!"
+    return sparseSubj
 
 
-def compileGraphAllSubj(subjGraph, superMetaData, numSimNodes=5 ):
+def compileGraphAllSubj(superMetaData, numSimNodes=5 ):
     """
     Compile the distances from all subject graphs to a single matrix.
 
@@ -172,24 +175,86 @@ def compileGraphAllSubj(subjGraph, superMetaData, numSimNodes=5 ):
     - numSimNodes (opt): how many similar nodes will be placed in the matrix
 
     Outputs:
-    - ???
+    - sparseGraph: the sparseGraph
     """
-    # set up joint graph?
-    # for each subject
+    # set up initial graph:
+    fn = str(0).zfill(4)
+    # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+    subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
     # compileGraphSingleSubj()
-    # ^ can this be a single liner?
+    sparseGraph = compileGraphSingleSubj(subjGraph, superMetaData, 0, numSimNodes=3)
+
+    # for each subject
+    # for s in xrange(len(superMetaData["subjectSuperPixels"])-1):
+    for s in xrange(1):
+        fn = str(s+1).zfill(4)
+        # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+        subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
+        # compileGraphSingleSubj()
+        sparseSubjI = compileGraphSingleSubj(subjGraph, superMetaData, s+1, numSimNodes=3)
+        sparseGraph = sp.hstack((sparseGraph, sparseSubjI), format='csr')
     # return the massive joint graph matrix
+    return sparseGraph
+    print "Finished compiling complete sparse graph!"
+
+
+#--------------------------------------------------------------------------
+# Saving/Loading Complete Sparse Graph
+#--------------------------------------------------------------------------
+
+def saveSparseGraph(graph, fn):
+    """
+    Try to save the graph using numpy.save
     
+    Inputs:
+    - graph: the csr_matrix to save
+    - fn: the filename base (no extensions)
+    
+    Returns: none
+    """
+    np.savez(fn, data=graph.data, indices=graph.indices, indptr=graph.indptr, shape=graph.shape)
+    print "Saved the files"
+    
+    
+def loadSparseGraph(fn):
+    """
+    Try to load the previously saved graph
+    
+    Inputs:
+    - fn: the file name/path base (no extensions)
+    
+    Returns: 
+    - the loaded sparse matrix
+    """
+    loader = np.load(fn+".npz")
+    print "Sparse graph loaded"
+    return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']), shape=loader['shape'])
+
 
 # Actually do things
 # fn = "test_results/"+str(args.subject).zfill(4)
 # fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
 # Load the graph for a single subject
-fn = "0000"
-subjGraph = loadSubjectGraph(fn) 
+# fn = "0000"
+# subjGraph = loadSubjectGraph(fn) 
 # Get the metadata - should this actually be called metadata?
 superMetaData = getSubjectSizes()
-# compile the graph for a single subject
-subjIdx = 0
-numSimNodes = 5
-graph = compileGraphSingleSubj(subjGraph, superMetaData, subjIdx)
+# # compile the graph for a single subject
+# subjIdx = 0
+# numSimNodes = 5
+# graph = compileGraphSingleSubj(subjGraph, superMetaData, subjIdx)
+
+# Create the compiled graph
+simNodes = 3
+sparseGraph = compileGraphAllSubj(superMetaData, numSimNodes=simNodes)
+# Save the compiled graph
+# outFN = "/pylon2/ms4s88p/jms565/compiledSparseGraph"
+outFN = "compiledSparseGraph"
+
+saveSparseGraph(sparseGraph, outFN)
+
+# confirmation
+# loadedGraph = loadSparseGraph(outFN)
+# A = sparseGraph.todense()
+# B = loadedGraph.todense()
+# print A.all()==B.all()
