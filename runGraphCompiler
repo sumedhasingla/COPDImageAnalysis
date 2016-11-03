@@ -1,0 +1,6 @@
+#!/bin/bash
+CORES=2
+
+for i in {0..3} ; do
+    /home/jenna/Research/lung-image-analysis/compileGraph.py -c $CORES -s $i
+done

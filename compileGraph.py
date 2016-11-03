@@ -121,7 +121,26 @@ def getSubjectSizes():
     return superMetaData
 
 
-def compileGraphSingleSubj(subjGraph, superMetaData, subjIdx, numSimNodes=5):
+def loadMetadata(filename):
+    """
+    Load the metadata.
+
+    Inputs:
+    - filename: the name of the metadata file to load
+
+    Returns: the loaded lung dataset metadata
+    """
+    loader = np.load(filename+".npz")
+    md = {
+        "totalSuperPixels": loader['totalSP'],
+        "subjectSuperPixels": loader['subjSP'],
+        "superPixelIndexingStart": loader['indStart'],
+        "superPixelIndexingEnd": loader['indEnd']
+    }
+    return md
+
+
+def compileGraphSingleSubj(superMetaData, subjIdx, numSimNodes=5):
     """ 
     Extract the data from a single subject into a massive matrix
     Matrix size is # elements in DB subject x # elements in query subject
@@ -135,6 +154,13 @@ def compileGraphSingleSubj(subjGraph, superMetaData, subjIdx, numSimNodes=5):
 
     Returns:
     """
+    # WARNING: TESTING PARALLELIZATION
+    # set up initial graph:
+    fn = str(subjIdx).zfill(4)
+    # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+    subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
+    # END WARNING
+
     # Uses the superMetaData, subjIdx, numSimNodes
     numSubjPix = superMetaData["subjectSuperPixels"][subjIdx]
 
@@ -230,31 +256,73 @@ def loadSparseGraph(fn):
     print "Sparse graph loaded"
     return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']), shape=loader['shape'])
 
-
+#-------------------------------------------------------------------------------
 # Actually do things
-# fn = "test_results/"+str(args.subject).zfill(4)
-# fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
-# Load the graph for a single subject
-# fn = "0000"
-# subjGraph = loadSubjectGraph(fn) 
+#-------------------------------------------------------------------------------
+
+# Argument parsing stuff
+parser = argparse.ArgumentParser()
+# Adding arguments to parse
+# parser.add_argument("-n", "--neighbors", help="the number of nearest neighbors", type=int, default=5)
+parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
+parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=1)
+# parser.add_argument("-f", "--filepath", help="the file path for the output file")
+# Parsing the arguments
+args = parser.parse_args()
+
 # Get the metadata - should this actually be called metadata?
-superMetaData = getSubjectSizes()
+metadataFN = "test-metadata"
+superMetaData = loadMetadata(metadataFN)
 # # compile the graph for a single subject
 # subjIdx = 0
 # numSimNodes = 5
 # graph = compileGraphSingleSubj(subjGraph, superMetaData, subjIdx)
 
+# ----------------------------------------------------------------------
+# BATCH - TOO SLOW
 # Create the compiled graph
-simNodes = 3
-sparseGraph = compileGraphAllSubj(superMetaData, numSimNodes=simNodes)
+# simNodes = 3
+# sparseGraph = compileGraphAllSubj(superMetaData, numSimNodes=simNodes)
 # Save the compiled graph
 # outFN = "/pylon2/ms4s88p/jms565/compiledSparseGraph"
-outFN = "compiledSparseGraph"
+#----------------------------------------------------------------------
 
+#----------------------------------------------------------------------
+# PARALLELIZED 
+print "About to start building the graph in parallel"
+subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(superMetaData, args.subject) for i in xrange(1))
+print "Finished building individual graphs"
+
+sparseGraph = sp.hstack(subjGraph, format="csr")
+
+outFN = "sparseGraphs/"+str(args.subject).zfill(4)
 saveSparseGraph(sparseGraph, outFN)
 
+#----------------------------------------------------------------------
+
+#----------------------------------------------------------------------
+# Testing 
+# sparseGraph = compileGraphSingleSubj(superMetaData, 0)
+# for i in xrange(3):
+#     subjGraph = compileGraphSingleSubj(superMetaData, i)
+#     sparseGraph = sp.hstack((sparseGraph, subjGraph), format='csr')
+
+#----------------------------------------------------------------------
+
+# Compile the subject graphs
+# sparseGraph2 = loadSparseGraph("sparseGraphs/0000")
+# # for i in xrange(len(superMetaData["numSubjSuperPixels"])-1):
+# for i in xrange(3):
+#     fn = str(i+1).zfill(4)
+#     loadedGraph = loadSparseGraph("sparseGraphs/"+fn)
+#     sparseGraph2 = sp.hstack((sparseGraph2, loadedGraph), format="csr")
+
+# outFN = "sparseGraphs/compositeSparseGraph"
+# saveSparseGraph(sparseGraph, outFN)
+
 # confirmation
-# loadedGraph = loadSparseGraph(outFN)
+# # loadedGraph = loadSparseGraph(outFN)
 # A = sparseGraph.todense()
-# B = loadedGraph.todense()
-# print A.all()==B.all()
+# # B = loadedGraph.todense()
+# C = sparseGraph2.todense()
+# print A.all()==C.all()
