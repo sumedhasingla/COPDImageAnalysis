@@ -39,7 +39,7 @@ def loadPickledData():
     return data
 
 
-def loadSubjectGraph(fn):
+def loadDenseSubjectGraph(fn):
     """
     Load the subject graphs from an HDF5 file.
 
@@ -76,51 +76,6 @@ def loadSubjectGraph(fn):
 # Building Complete Sparse Graph
 #--------------------------------------------------------------------------
 
-def getSubjectSizes():
-    """
-    Get the total number of superpixels, the number of superpixels for each
-    subject, and the start/end indices for each subject in the combined graph
-
-    Inputs: 
-    None
-
-    Outputs:
-    - superMetaData: dictionary containing
-        - totalSuperPixels: the total number of superpixels of all subjects combined
-        - subjectSuperPixels: the nubmer of superpixels in each subject
-        - superPixelIndexingStart: the index indicating the start of each subject
-        - superPixelIndexingEnd: the index indicating the end of each subject
-    """
-    # read data from original files
-    data = loadPickledData()
-    # look at size of each file
-    numSubjSuperPixels = [ len(s['I']) for s in data ]
-    totalSuperPixels = sum(numSubjSuperPixels)
-    # create list/dictionary for storing sizes of each subject, start index, and end index?
-    superPixelIndexingStart = np.zeros(len(numSubjSuperPixels))
-    superPixelIndexingEnd = np.zeros(len(numSubjSuperPixels))
-    # subj1: 0 - len(subj1)-1
-    # subj2: len(subj1) - len(subj1)+len(subj2)-1
-    # is there a more condensed way to write this?
-    for i in xrange(len(numSubjSuperPixels)):
-        if i == 0 :
-            superPixelIndexingStart[i] = 0
-            superPixelIndexingEnd[i] = numSubjSuperPixels[i]-1
-        else:
-            superPixelIndexingStart[i] = numSubjSuperPixels[i-1] + superPixelIndexingStart[i-1]
-            superPixelIndexingEnd[i] = numSubjSuperPixels[i] + superPixelIndexingEnd[i-1]
-
-    # return the list/dictionary
-    superMetaData = {
-        "totalSuperPixels": totalSuperPixels,
-        "subjectSuperPixels": numSubjSuperPixels,
-        # add both start and end and figure out which one to use later
-        "superPixelIndexingStart": superPixelIndexingStart,
-        "superPixelIndexingEnd": superPixelIndexingEnd
-    }
-    return superMetaData
-
-
 def loadMetadata(filename):
     """
     Load the metadata.
@@ -140,7 +95,7 @@ def loadMetadata(filename):
     return md
 
 
-def compileGraphSingleSubj(superMetaData, subjIdx, numSimNodes=5):
+def compileGraphSingleSubj(superMetaData, subjIdx, numSimNodes=3):
     """ 
     Extract the data from a single subject into a massive matrix
     Matrix size is # elements in DB subject x # elements in query subject
@@ -154,74 +109,54 @@ def compileGraphSingleSubj(superMetaData, subjIdx, numSimNodes=5):
 
     Returns:
     """
-    # WARNING: TESTING PARALLELIZATION
     # set up initial graph:
     fn = str(subjIdx).zfill(4)
     # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
-    subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
-    # END WARNING
+    subjGraph = loadDenseSubjectGraph("./individualSubjectGraphs/"+fn)
 
-    # Uses the superMetaData, subjIdx, numSimNodes
-    numSubjPix = superMetaData["subjectSuperPixels"][subjIdx]
-
-    # set up initial sparse matrix
-    subjJShape = (superMetaData["subjectSuperPixels"][0], numSubjPix)
-    # get 3 closest distances for all elements in subj
-    cols = subjGraph[0]["nodes"][:, 0:numSimNodes] 
-    dists = subjGraph[0]["dists"][:, 0:numSimNodes]
-    rows = np.matrix([[i] * numSimNodes for i in xrange(superMetaData["subjectSuperPixels"][0])])
-    # make sparse matrix here
-    sparseSubj = sp.csr_matrix( (list(dists.flat),(list(rows.flat), list(cols.flat))), shape=subjJShape)
-
+    # make initial sparse matrix here
+    j = 0
+    sparseSubj = buildBlock(subjGraph[j], subjIdx, j, superMetaData)
     # for each query subject in the h5 file for one db subject
     for j in xrange(len(subjGraph)-1):
-        subjJShape = (superMetaData["subjectSuperPixels"][j+1], numSubjPix)
-        # get 3 closest distances 
-        cols = subjGraph[j+1]["nodes"][:, 0:numSimNodes] 
-        dists = subjGraph[j+1]["dists"][:, 0:numSimNodes]
-        rows = np.matrix([[i] * numSimNodes for i in xrange(superMetaData["subjectSuperPixels"][j+1])])
-        # make sparse matrix here
-        sparseJ = sp.csr_matrix( (list(dists.flat),(list(rows.flat), list(cols.flat))), shape=subjJShape)
-        # concatenate w/ row matrix?
-        sparseSubj = sp.vstack((sparseSubj, sparseJ), format='csr')
+        # make the block for subjects i-j
+        sparseJ = buildBlock(subjGraph[j+1], subjIdx, j+1, superMetaData)
+        # concatenate w/ row matrix
+        sparseSubj = sp.hstack((sparseSubj, sparseJ), format='csr')
         
     print "Finished building single graph for DB subject " + str(subjIdx) + "!"
     return sparseSubj
 
 
-def compileGraphAllSubj(superMetaData, numSimNodes=5 ):
+def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
     """
-    Compile the distances from all subject graphs to a single matrix.
+    Build a single block (subj_i-subj_j) of the subj_i matrix
 
     Inputs:
-    - subjGraph: data loaded from h5 files
-    - superMetaData: data about the size and index of the query subjects
-                    (from getSubjectSizes())
-    - subjIdx: number for identifying the current subject
-    - numSimNodes (opt): how many similar nodes will be placed in the matrix
+    - graphIJ: 
+    - i: index of subj i
+    - j: index of subj j
+    - superMetaData: metadata of the dataset
+    - numSimNodes: 3 by default, can be changed for different dataset
 
-    Outputs:
-    - sparseGraph: the sparseGraph
+    Returns:
+    - sparse matrix full of the nonzero values in that block
     """
-    # set up initial graph:
-    fn = str(0).zfill(4)
-    # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
-    subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
-    # compileGraphSingleSubj()
-    sparseGraph = compileGraphSingleSubj(subjGraph, superMetaData, 0, numSimNodes=3)
 
-    # for each subject
-    # for s in xrange(len(superMetaData["subjectSuperPixels"])-1):
-    for s in xrange(1):
-        fn = str(s+1).zfill(4)
-        # subjGraph = loadSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
-        subjGraph = loadSubjectGraph("./individualSubjectGraphs/"+fn)
-        # compileGraphSingleSubj()
-        sparseSubjI = compileGraphSingleSubj(subjGraph, superMetaData, s+1, numSimNodes=3)
-        sparseGraph = sp.hstack((sparseGraph, sparseSubjI), format='csr')
-    # return the massive joint graph matrix
-    return sparseGraph
-    print "Finished compiling complete sparse graph!"
+    # set up shape of sparse matrix
+    shapeIJ = (superMD["subjectSuperPixels"][i], superMD["subjectSuperPixels"][j])
+
+    # if i and j are the same, don't take the distance between the node and itself
+    if i == j:
+        rows = graphIJ["nodes"][:, 1:numSimNodes+1]
+        dists = graphIJ["dists"][:, 1:numSimNodes+1]
+    else:
+        rows = graphIJ["nodes"][:, 0:numSimNodes]
+        dists = graphIJ["dists"][:, 0:numSimNodes]
+    # set up values for the columns of the matrix (total # cols = # pix in subj j)
+    cols = np.matrix([[k] * numSimNodes for k in xrange(superMD["subjectSuperPixels"][j])])
+
+    return sp.csr_matrix((list(dists.flat),(list(rows.flat), list(cols.flat))), shape=shapeIJ)
 
 
 #--------------------------------------------------------------------------
@@ -266,25 +201,34 @@ parser = argparse.ArgumentParser()
 # parser.add_argument("-n", "--neighbors", help="the number of nearest neighbors", type=int, default=5)
 parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
 parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=1)
-# parser.add_argument("-f", "--filepath", help="the file path for the output file")
+parser.add_argument("-t", "--jobtype", help="the type of job to run: build a single graph (0) or compile all graphs (1)", type=int, default=0)
 # Parsing the arguments
 args = parser.parse_args()
 
 # Get the metadata - should this actually be called metadata?
 metadataFN = "test-metadata"
 superMetaData = loadMetadata(metadataFN)
-# # compile the graph for a single subject
-# subjIdx = 0
-# numSimNodes = 5
-# graph = compileGraphSingleSubj(subjGraph, superMetaData, subjIdx)
 
 # ----------------------------------------------------------------------
-# BATCH - TOO SLOW
-# Create the compiled graph
+# Testing revisions
+# Create the compiled graph for a single subject i
 # simNodes = 3
-# sparseGraph = compileGraphAllSubj(superMetaData, numSimNodes=simNodes)
-# Save the compiled graph
-# outFN = "/pylon2/ms4s88p/jms565/compiledSparseGraph"
+# print "About to start building the graph in parallel"
+# subjGraph0 = compileGraphSingleSubj(superMetaData, 0)
+# print "Finished building first graph"
+
+# outFN = "sparseGraphs/"+str(0).zfill(4)
+# saveSparseGraph(subjGraph0, outFN)
+
+# print "About to start building the graph in parallel"
+# subjGraph1 = compileGraphSingleSubj(superMetaData, 1)
+# print "Finished building second graph"
+
+# sparseGraph = sp.vstack((subjGraph0, subjGraph1), format="csr")
+# print "Stacked the graphs vertically"
+
+# outFN = "sparseGraphs/"+str(1).zfill(4)
+# saveSparseGraph(subjGraph1, outFN)
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
@@ -293,36 +237,93 @@ print "About to start building the graph in parallel"
 subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(superMetaData, args.subject) for i in xrange(1))
 print "Finished building individual graphs"
 
-sparseGraph = sp.hstack(subjGraph, format="csr")
-
 outFN = "sparseGraphs/"+str(args.subject).zfill(4)
-saveSparseGraph(sparseGraph, outFN)
+saveSparseGraph(subjGraph, outFN)
 
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
-# Testing 
+# # Testing 
 # sparseGraph = compileGraphSingleSubj(superMetaData, 0)
 # for i in xrange(3):
-#     subjGraph = compileGraphSingleSubj(superMetaData, i)
-#     sparseGraph = sp.hstack((sparseGraph, subjGraph), format='csr')
+#     subjGraph = compileGraphSingleSubj(superMetaData, i+1)
+#     fn = "sparseGraphs/"+str(i+1).zfill(4)
+#     saveSparseGraph(subjGraph, fn)
+#     sparseGraph = sp.vstack((sparseGraph, subjGraph), format='csr')
 
 #----------------------------------------------------------------------
 
 # Compile the subject graphs
-# sparseGraph2 = loadSparseGraph("sparseGraphs/0000")
-# # for i in xrange(len(superMetaData["numSubjSuperPixels"])-1):
-# for i in xrange(3):
-#     fn = str(i+1).zfill(4)
-#     loadedGraph = loadSparseGraph("sparseGraphs/"+fn)
-#     sparseGraph2 = sp.hstack((sparseGraph2, loadedGraph), format="csr")
+if args.jobtype == 1:
+    sparseGraph2 = loadSparseGraph("sparseGraphs/0000")
+    # for i in xrange(len(superMetaData["numSubjSuperPixels"])-1):
+    for i in xrange(3):
+        fn = str(i+1).zfill(4)
+        loadedGraph = loadSparseGraph("sparseGraphs/"+fn)
+        sparseGraph2 = sp.vstack((sparseGraph2, loadedGraph), format="csr")
 
-# outFN = "sparseGraphs/compositeSparseGraph"
-# saveSparseGraph(sparseGraph, outFN)
+    outFN = "sparseGraphs/compositeSparseGraph"
+    saveSparseGraph(sparseGraph, outFN)
 
+#---------------------------------------------------------------------
+# Checking to see if it worked
 # confirmation
-# # loadedGraph = loadSparseGraph(outFN)
+# loadedGraph = loadSparseGraph(outFN)
 # A = sparseGraph.todense()
 # # B = loadedGraph.todense()
 # C = sparseGraph2.todense()
 # print A.all()==C.all()
+
+# print "------------------ Subject " + str(0) + " ----------------"
+# mati = subjGraph0
+# # check to see if min/max bot > 0
+# print "  Min >= 0: " + str((mati.min())>= 0.0)
+# print "  Max >= 0: " + str((mati.max())>= 0.0)
+# # check to see the number of elements in each col 
+# print "  Min # elements in each col: " + str((mati>0).sum(axis=0).min())
+# print "  Max # elements in each col: " + str((mati>0).sum(axis=0).max())
+# # check to see the number of elements in each row
+# print "  Min # elements in each row: " + str((mati>0).sum(axis=1).min())
+# print "  Max # elements in each row: " + str((mati>0).sum(axis=1).max())
+# # check to see if the number of cols w/ 4 == shape of mat
+# print "  Shape of the matrix: " + str(mati.shape)
+# # check to see how many nonzero values are in the matrix
+# print "  Number of nonzero values: " + str((mati>0).sum())
+# print "  According to the matrix: " + str(mati.nnz)
+# print "  Should be: " + str(3*superMetaData["totalSuperPixels"])
+
+# print "------------------ Subject " + str(0) + " (Loaded) ----------------"
+# mati = loadedGraph
+# # check to see if min/max bot > 0
+# print "  Min >= 0: " + str((mati.min())>= 0.0)
+# print "  Max >= 0: " + str((mati.max())>= 0.0)
+# # check to see the number of elements in each col 
+# print "  Min # elements in each col: " + str((mati>0).sum(axis=0).min())
+# print "  Max # elements in each col: " + str((mati>0).sum(axis=0).max())
+# # check to see the number of elements in each row
+# print "  Min # elements in each row: " + str((mati>0).sum(axis=1).min())
+# print "  Max # elements in each row: " + str((mati>0).sum(axis=1).max())
+# # check to see if the number of cols w/ 4 == shape of mat
+# print "  Shape of the matrix: " + str(mati.shape)
+# # check to see how many nonzero values are in the matrix
+# print "  Number of nonzero values: " + str((mati>0).sum())
+# print "  According to the matrix: " + str(mati.nnz)
+# print "  Should be: " + str(3*superMetaData["totalSuperPixels"])
+
+# print "------------------ Subject " + str(1) + " ----------------"
+# mati = subjGraph1
+# # check to see if min/max bot > 0
+# print "  Min >= 0: " + str((mati.min())>= 0.0)
+# print "  Max >= 0: " + str((mati.max())>= 0.0)
+# # check to see the number of elements in each col 
+# print "  Min # elements in each col: " + str((mati>0).sum(axis=0).min())
+# print "  Max # elements in each col: " + str((mati>0).sum(axis=0).max())
+# # check to see the number of elements in each row
+# print "  Min # elements in each row: " + str((mati>0).sum(axis=1).min())
+# print "  Max # elements in each row: " + str((mati>0).sum(axis=1).max())
+# # check to see if the number of cols w/ 4 == shape of mat
+# print "  Shape of the matrix: " + str(mati.shape)
+# # check to see how many nonzero values are in the matrix
+# print "  Number of nonzero values: " + str((mati>0).sum())
+# print "  According to the matrix: " + str(mati.nnz)
+# print "  Should be: " + str(3*superMetaData["totalSuperPixels"])
