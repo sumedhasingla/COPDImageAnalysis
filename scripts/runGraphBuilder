@@ -1,0 +1,19 @@
+#!/bin/bash
+CORES=2
+NEIGHBORS=5
+
+for i in {0..7291} ; do
+    DATAFN="/pylon1/ms4s88p/jms565/test_results/`printf "%04d" $i`.h5"
+    # if [ ! -f $DATAFN ] ; then
+    JOBNAME="build-graph-subject-`printf "%04d" $i`"
+    OUTFN="/pylon1/ms4s88p/jms565/stdout-logs/out`printf "%04d" $i`.log"
+    ERRFN="/pylon1/ms4s88p/jms565/stderr-logs/err`printf "%04d" $i`.log"
+    sbatch  -o $OUTFN  -e $ERRFN --job-name $JOBNAME slurmLauncher.sh /home/jms565/code/buildGraphSingleSubj.py -c $CORES -n $NEIGHBORS -s $i
+
+    if [ $(( $i % 100 )) -eq 0 ] ; then
+        # pause for 20 seconds to hopefully prevent file corruption
+        sleep 20
+        echo $i
+    fi
+    #fi
+done

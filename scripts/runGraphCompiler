@@ -1,0 +1,15 @@
+#!/bin/bash
+CORES=2
+
+for i in {327..327} ; do
+    JOBNAME="build-graph-subject-`printf "%04d" $i`"
+    OUTFN="/pylon1/ms4s88p/jms565/stdout-logs/out`printf "%04d" $i`.log"
+    ERRFN="/pylon1/ms4s88p/jms565/stderr-logs/err`printf "%04d" $i`.log"
+    sbatch  -o $OUTFN  -e $ERRFN --job-name $JOBNAME slurmLauncher.sh /home/jms565/code/compileGraph.py -c $CORES -s $i
+
+    if [ $(( $i % 100 )) -eq 0 ] ; then
+        # pause for 20 seconds to hopefully prevent file corruption
+        sleep 20
+        echo $i
+    fi
+done
