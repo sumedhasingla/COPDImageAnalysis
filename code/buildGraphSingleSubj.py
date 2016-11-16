@@ -12,6 +12,12 @@ from joblib import Parallel, delayed  # conda install -c anaconda joblib=0.9.4
 from cyflann import *
 import argparse
 
+"""
+
+Notes:
+- The distance generated in the graph is the Euclidean distance squared.
+"""
+
 # this is a helper function to set the configuration
 def loadShelvePickledData(useHarilick=False):     
 

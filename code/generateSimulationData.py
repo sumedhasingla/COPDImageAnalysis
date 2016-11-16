@@ -28,6 +28,7 @@ Functions:
 
 Notes:
 - How to extract the features for each node? )(extractFeature)
+- Need to add features to simulateSinglePatient()
 """
 
 def trainModel(X_train, y_train, X_test, y_test):
@@ -178,6 +179,9 @@ def extractFeatures(X, model):
     - X: 
     - model:
     """
+
+    model.layers[-2].get_weights()
+    model.layers[-2].get_output_at(node, index)
 
 
 #--------------------------------------------------------------------------
