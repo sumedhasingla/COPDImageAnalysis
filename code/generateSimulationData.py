@@ -6,6 +6,8 @@ from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.utils import np_utils
+from keras.layers.core import K
+import tensorflow as tf
 
 # random numbers
 from random import randint
@@ -27,8 +29,8 @@ Functions:
   and return the combined image
 
 Notes:
-- How to extract the features for each node? )(extractFeature)
-- Need to add features to simulateSinglePatient()
+- When extracting features and building the nn model, should the learning phase
+  be the same or different? (0 for test and 1 for train)
 """
 
 def trainModel(X_train, y_train, X_test, y_test):
@@ -48,7 +50,7 @@ def trainModel(X_train, y_train, X_test, y_test):
 
     batch_size = 128
     nb_classes = 10
-    nb_epoch = 20
+    nb_epoch = 5  # supposed to be 20 - for real
 
     print(X_train.shape[0], 'train samples')
     print(X_test.shape[0], 'test samples')
@@ -61,7 +63,6 @@ def trainModel(X_train, y_train, X_test, y_test):
     model.add(Dense(512, input_shape=(784,)))
     model.add(Activation('relu'))
     model.add(Dropout(0.2))
-    model.add(Dense(512))
     model.add(Activation('relu'))
     model.add(Dropout(0.2))
     model.add(Dense(10))
@@ -104,10 +105,13 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     v0 = mnistZeros[idx0]
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
     abnormal = v1+v0
+    # threshold values above 1.0
+    idx = [i for i, v in enumerate(abnormal) if v > 1.0]
+    abnormal[idx] = 1.0
     return abnormal
 
 
-def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros):
+def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
     """
     Generate the abnormal and normal nodes for a single patient
 
@@ -116,6 +120,7 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros):
     - totalNodes: the total number of nodes to generate
     - digits: MNIST data
     - mnistOnes, mnistZeros: data used to generate abnormal nodes
+    - model to use for generating features
 
     Returns:
     - nodes: list of normal and abnormal nodes
@@ -125,19 +130,39 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros):
     for i in xrange(y):
         # generate a single abnormal node
         abnormal = generateAbnormalNode(mnistOnes, mnistZeros)
-        # crap how am I supposed to get the feature again?
+        # extract the feature
+        feats = extractFeatures(abnormal.reshape((1, 784)), model)
         # add the feature for that node to the list
-        nodes[i] = abnormal
+        nodes[i] = feats
 
     # create totalNodes-y normal nodes
     for i in xrange(y, totalNodes):
         # generate the random number
-        num = randint(0, len(digits))
-        # extract the feature?
+        num = randint(0, len(digits)-1)
+        # extract the feature
+        feats = extractFeatures(digits[num].reshape((1, 784)), model)
         # add the feature for that node to the list
-        nodes[i] = digits[num]
+        nodes[i] = feats
 
-    return nodes
+    return np.vstack(nodes)
+
+
+def extractFeatures(X, model):
+    """
+    Extract the features of X using the activation layer of the model
+
+    Inputs:
+    - X: data sample to extract features for
+    - model: model to use to get the features
+
+    Returns: the np array of features (output from the last layer of the model)
+    """
+    # https://keras.io/getting-started/faq/#how-can-i-visualize-the-output-of-an-intermediate-layer
+    # https://github.com/fchollet/keras/issues/1641
+    get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-2].output])
+    layer_output = get_last_layer_output([X, 0])[0]
+
+    return layer_output
 
 
 def computePairwiseSimilarities(patients):
@@ -159,7 +184,7 @@ def computePairwiseSimilarities(patients):
     # details: use the kl divergence, find 3 nearest neighbors
     #          not sure what the pairwise picker line does?
     #          rbf and projectPSD help ensure the data is separable?
-    model = Pipeline([
+    distEstModel = Pipeline([
         ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3])),
         ('pick', PairwisePicker((0, 0))),
         ('symmetrize', Symmetrize()),
@@ -168,20 +193,9 @@ def computePairwiseSimilarities(patients):
     ])
 
     # return the pairwise similarities between the bags (patients)
+    distEstModel.fit(feats)
+
     # should check the structure of this data when this step is implemented
-
-
-def extractFeatures(X, model):
-    """
-    Extract the features of X using the activation layer of the model
-
-    Inputs:
-    - X: 
-    - model:
-    """
-
-    model.layers[-2].get_weights()
-    model.layers[-2].get_output_at(node, index)
 
 
 #--------------------------------------------------------------------------
@@ -199,6 +213,7 @@ X_train /= 255
 X_test /= 255
 
 # Train the model
+K._LEARNING_PHASE = tf.constant(0)
 model = trainModel(X_train, y_train, X_test, y_test)
 
 # get the data for generating the abnormal nodes
@@ -208,15 +223,14 @@ mnistOnes = X_test[mnistOneIndices]
 mnistZeros = X_test[mnistZeroIndices]
 
 # Generate the simulated patients
-N = 7292  # number of patients
-totalNodes = 500  # total number of nodes for each patient
+N = 100  # number of patients - should be 7292
+totalNodes = 50  # total number of nodes for each patient - should be 500
 simPatients = [[] for i in xrange(N)]
 y = [ 0 for i in xrange(N)]
 for i in xrange(N):
     # generate y
-    y[i] = randint(0, M)
+    y[i] = randint(0, totalNodes)
     # generate the nodes
-    simPatients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros)
-
+    simPatients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
 
 # Compute the pairwise similarity between patients using Dougal code

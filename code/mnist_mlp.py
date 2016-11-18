@@ -15,10 +15,16 @@ from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.utils import np_utils
 
+# TESTING
+# from keras import backend as K
+from keras.layers.core import K
+import tensorflow as tf
+K._LEARNING_PHASE = tf.constant(0)
+
 
 batch_size = 128
 nb_classes = 10
-nb_epoch = 20
+nb_epoch = 5
 
 # the data, shuffled and split between train and test sets
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
@@ -37,7 +43,7 @@ Y_train = np_utils.to_categorical(y_train, nb_classes)
 Y_test = np_utils.to_categorical(y_test, nb_classes)
 
 model = Sequential()
-model.add(Dense(512, input_shape=(784,)))
+model.add(Dense(512, input_shape=X_train.shape[1:]))
 model.add(Activation('relu'))
 model.add(Dropout(0.2))
 model.add(Dense(512))
@@ -58,3 +64,9 @@ history = model.fit(X_train, Y_train,
 score = model.evaluate(X_test, Y_test, verbose=0)
 print('Test score:', score[0])
 print('Test accuracy:', score[1])
+
+# TESTING
+get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-2].output])
+layer_output = get_last_layer_output([X_test, 0])[0]
+
+output2 = get_last_layer_output([X_test, 0])
