@@ -201,6 +201,37 @@ def computePairwiseSimilarities(patients, y):
 
 
 #--------------------------------------------------------------------------
+# Saving and Loading Files
+#--------------------------------------------------------------------------
+def saveSimilarities(fn, sims):
+    """
+    Save the similarity matrix to a .npz file.
+
+    Inputs:
+    - fn: directory/filename to save the file to (extension will be provided by func.)
+    - sims: similarity matrix
+
+    Returns: nothing
+    """
+    np.savez(fn, similarities=sims)
+    print "Saved the similarities to a file."
+
+
+def loadSimilarities(fn):
+    """
+    Load the previously saved similarity matrix from a .npz file
+
+    Inputs:
+    - fn: directory/filename (minus extension) to load the file from
+
+    Returns:
+    - loadedSims: similarity matrix
+    """
+    loader = np.load(fn+".npz")
+    print "Similarities loaded!"
+    return loader['similarities']
+
+#--------------------------------------------------------------------------
 # Actually do stuff...
 #--------------------------------------------------------------------------
 
