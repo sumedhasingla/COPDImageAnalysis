@@ -32,6 +32,9 @@ Notes:
 - When extracting features and building the nn model, should the learning phase
   be the same or different? (0 for test and 1 for train)
 """
+#--------------------------------------------------------------------------
+# Functions Which Do Cool Math/ML Stuff
+#--------------------------------------------------------------------------
 
 def trainModel(X_train, y_train, X_test, y_test):
     """
@@ -203,6 +206,37 @@ def computePairwiseSimilarities(patients, y):
 #--------------------------------------------------------------------------
 # Saving and Loading Files
 #--------------------------------------------------------------------------
+
+def saveSimSubject(fn, patient, y):
+    """
+    Function to save the generated patient features/nodes.
+
+    Inputs:
+    - fn: filename/directory to save to (extensionless)
+    - patient: single patient's features/nodes
+
+    Returns: nothing
+    """
+    np.savez(fn, nodes=patient, numAb=y)
+    print "Saved the data for a simulated patient to a .npz file."
+
+
+def loadSimSubject(fn):
+    """
+    Load a previously saved simulated subject from a .npz file.
+
+    Inputs:
+    - fn: filename/directory to load from (extensionless)
+
+    Returns:
+    - patient: loaded node/feature information
+    - y: number of abnormal nodes in the patient
+    """
+    loader = np.load(fn+".npz")
+    print "Simluated patient data loaded!"
+    return loader['nodes'], loader['numAb']
+
+
 def saveSimilarities(fn, sims):
     """
     Save the similarity matrix to a .npz file.
@@ -230,6 +264,7 @@ def loadSimilarities(fn):
     loader = np.load(fn+".npz")
     print "Similarities loaded!"
     return loader['similarities']
+
 
 #--------------------------------------------------------------------------
 # Actually do stuff...
