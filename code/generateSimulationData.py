@@ -165,20 +165,23 @@ def extractFeatures(X, model):
     return layer_output
 
 
-def computePairwiseSimilarities(patients):
+def computePairwiseSimilarities(patients, y):
     """
     Compute the pairwise similarity between bags using Dougal code
 
     Inputs:
     - patients: the collection of patient features
+    - y: labels (number of abnormal nodes) for each patient. Used to fit the
+         KNNDivergenceEstimator
 
-    Returns: the pairwise similarities between each patient
+    Returns: 
+    - sims: the pairwise similarities between each patient
+    * Note: sims is a NxN symmetric matrix, where N is the number of patients
     """
 
     # pass the features and labels to scikit-learn Features
-    feats = Features(bags, labels=labels) # directly from Dougal
+    feats = Features(patients, labels=y) # directly from Dougal
     # note: learning methods won't use the labels, this is for conveinence
-
 
     # estimate the distances between the bags (patients) using KNNDivergenceEstimator
     # details: use the kl divergence, find 3 nearest neighbors
@@ -193,9 +196,8 @@ def computePairwiseSimilarities(patients):
     ])
 
     # return the pairwise similarities between the bags (patients)
-    distEstModel.fit(feats)
-
-    # should check the structure of this data when this step is implemented
+    sims = distEstModel.fit_transform(feats)
+    return sims
 
 
 #--------------------------------------------------------------------------
@@ -213,8 +215,10 @@ X_train /= 255
 X_test /= 255
 
 # Train the model
+print "Training the knn model..."
 K._LEARNING_PHASE = tf.constant(0)
 model = trainModel(X_train, y_train, X_test, y_test)
+print "KNN model trained!"
 
 # get the data for generating the abnormal nodes
 mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
@@ -225,12 +229,20 @@ mnistZeros = X_test[mnistZeroIndices]
 # Generate the simulated patients
 N = 100  # number of patients - should be 7292
 totalNodes = 50  # total number of nodes for each patient - should be 500
-simPatients = [[] for i in xrange(N)]
+patients = [[] for i in xrange(N)]
 y = [ 0 for i in xrange(N)]
+print "Generating simulated patients..."
 for i in xrange(N):
     # generate y
     y[i] = randint(0, totalNodes)
     # generate the nodes
-    simPatients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+    patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+
+print "Patients have been simulated!"
 
 # Compute the pairwise similarity between patients using Dougal code
+print "Calculating similarities..."
+sims = computePairwiseSimilarities(patients, y)
+print "Similarities calculated!"
+
+# Build the nearest neighbor graph for the patients
