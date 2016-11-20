@@ -1,4 +1,6 @@
 import numpy as np
+import argparse
+from joblib import Parallel, delayed
 
 # simulation data
 from keras.datasets import mnist
@@ -18,6 +20,9 @@ from sklearn.pipeline import Pipeline
 from skl_groups.divergences import KNNDivergenceEstimator
 from skl_groups.kernels import PairwisePicker, Symmetrize, RBFize, ProjectPSD
 
+# from buildGraphSingleSubj.py
+from cyflann import *
+
 """
 The purpose of this file is to generate a set of simulated data for the lung 
 image analysis project. The data will come from the MNIST dataset, and abnormal 
@@ -33,7 +38,7 @@ Notes:
   be the same or different? (0 for test and 1 for train)
 """
 #--------------------------------------------------------------------------
-# Functions Which Do Cool Math/ML Stuff
+# New Functions Which Do Cool Math/ML Stuff
 #--------------------------------------------------------------------------
 
 def trainModel(X_train, y_train, X_test, y_test):
@@ -204,6 +209,63 @@ def computePairwiseSimilarities(patients, y):
 
 
 #--------------------------------------------------------------------------
+# Imported Functions from Previous Work (WARNING: MIGHT BE MODIFIED)
+#--------------------------------------------------------------------------
+
+def buildSubjectGraph(subj, patients, neighbors=3):
+    """
+    Find the numNodes nodes of each subject that are closest to N nodes
+    in every other subject.
+
+    Inputs:
+    - subj: index of the subject being database'd
+    - patients: collection of data to be graphed
+    - neighbors: the number of nearest nodes to save
+
+    Returns:
+    - subjDBs: list of lists of dictionaries of lists
+        - first layer = first subject
+        - second layer = second subject
+        - third layer = dictionary accessed by keys
+        - "nodes": list of N nearest nodes
+        - "dists": list of dists for N nearest nodes
+    """
+    flann = FLANNIndex()
+    subjDB = []
+    # vectorize data
+    # rowLengths = [ s['I'].shape[0] for s in data ]
+    rowLengths = [ p.shape[0] for p in patients ]
+    # X = np.vstack( [ s['I'] for s in data] )
+    X = np.vstack( [ p for p in patients])
+    # build the graph for a subject
+    print "Now building subject-subject mini databases..."
+    # flann.build_index(data[subj]['I'])
+    flann.build_index(patients[subj])
+    nodes, dists = flann.nn_index(X, neighbors+1)
+    # decode the results
+    idx = 0
+    for i in rowLengths:
+        # save the numNodes number of distances and nodes
+        if (dists[idx:idx+i, 0] == 0.0).all():
+            # shift the nodes
+            temp = {
+                "nodes": nodes[idx:idx+i, 1:1+neighbors],
+                "dists": dists[idx:idx+i, 1:1+neighbors]
+            }
+        else: 
+            # no shift needed
+            temp = {
+                "nodes": nodes[idx:idx+i, 0:neighbors],
+                "dists": dists[idx:idx+i, 0:neighbors]
+            }
+        idx = idx + i
+        subjDB.append(temp)
+    print "Subject level database complete for subject " + str(subj) + "!"
+    return subjDB
+
+
+
+#--------------------------------------------------------------------------
 # Saving and Loading Files
 #--------------------------------------------------------------------------
 
@@ -266,49 +328,181 @@ def loadSimilarities(fn):
     return loader['similarities']
 
 
+def saveSparseGraph(graph, fn):
+    """
+    IMPORTED!
+    Try to save the graph using numpy.save
+    
+    Inputs:
+    - graph: the csr_matrix to save
+    - fn: the filename base (no extensions)
+    
+    Returns: none
+    """
+    np.savez(fn, data=graph.data, indices=graph.indices, indptr=graph.indptr, shape=graph.shape)
+    print "Saved the files"
+    
+    
+def loadSparseGraph(fn):
+    """
+    IMPORTED
+    Try to load the previously saved graph. Uses a different format to build the 
+    sparse matrix. 
+
+    NOTE: Initial building uses the format
+
+        csr_matrix((data, (row_ind, col_ind)), [shape=(M, N)])
+
+    The row and col indices are not easily extractable from the csr_matrix, so the
+    loader uses the format
+
+        csr_matrix((data, indices, indptr), [shape=(M, N)])
+
+    to recreate the matrix. The loaded and original matrices have been compared 
+    and are the same.
+    
+    Inputs:
+    - fn: the file name/path base (no extensions)
+    
+    Returns: 
+
+    """
+    loader = np.load(fn+".npz")
+    print "Sparse graph loaded"
+    return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']), shape=loader['shape'])
+
+
+def saveSimulatedMetadata(fn, numSubjs, numNodes):
+    """
+    Generate and save the metadata needed for the simulated patient dataset.
+
+    Metadata:
+    - totalSuperPixels: the total number of nodes in all of the patients
+    - subjectSuperPixels: the number of nodes in each patient
+    - superPixelIndexingStart: 
+
+    Inputs: 
+    - fn: output filename
+    - numSubjs: number of subjects to generate
+    - numNodes: number of nodes for each subject
+
+    Returns: nothing
+    """
+    # generate the metadata
+    totalSP = numSubjs*numNodes
+    subjSP = [numNodes] * numSubjs
+    superPixelIndexingStart = np.zeros(numSubjs)
+    superPixelIndexingEnd = np.zeros(numSubjs)
+
+    for i in xrange(len(numSubjSuperPixels)):
+        if i == 0 :
+            superPixelIndexingStart[i] = 0
+            superPixelIndexingEnd[i] = numSubjSuperPixels[i]-1
+        else:
+            superPixelIndexingStart[i] = numSubjSuperPixels[i-1] + superPixelIndexingStart[i-1]
+            superPixelIndexingEnd[i] = numSubjSuperPixels[i] + superPixelIndexingEnd[i-1]
+
+    np.savez(fn, totalSP=totalSP, subjSP=subjSP, indStart=superPixelIndexingStart, indEnd=superPixelIndexingEnd)
+
+
+def loadSimulatedMetadata(fn):
+    """
+    Load metadata for simulated dataset from file.
+
+    Inputs: 
+    - fn: filename to read from (extensionless)
+
+    Returns:
+    - md: metadata
+        - totalSuperPixels: total number of nodes in set
+        - subjectSuperPixels: the number of nodes in each subject
+        - superPixelIndexingStart: the start index of each subject in the list
+        - superPixelIndexingEnd: the end index of each subject in the list
+    """
+    loader = np.load(filename+".npz")
+    md = {
+        "totalSuperPixels": loader['totalSP'],
+        "subjectSuperPixels": loader['subjSP'],
+        "superPixelIndexingStart": loader['indStart'],
+        "superPixelIndexingEnd": loader['indEnd']
+    }
+    return md
+
+
 #--------------------------------------------------------------------------
 # Actually do stuff...
 #--------------------------------------------------------------------------
 
-# Load MNIST data
-# the data, shuffled and split between train and test sets
-(X_train, y_train), (X_test, y_test) = mnist.load_data()
-X_train = X_train.reshape(60000, 784)
-X_test = X_test.reshape(10000, 784)
-X_train = X_train.astype('float32')
-X_test = X_test.astype('float32')
-X_train /= 255
-X_test /= 255
+# Argument parsing
+parser = argparse.ArgumentParser()
+# Adding arguments to parse
+parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
+parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=2)
+parser.add_argument("-d", "--debug", help="flag to print out helpful output", type=int, default=0)  # 1 for debugging messages
+runTypeHelp = "which type of program to run"
+runTypeHelp += "    - 0: generate metadata"
+runTypeHelp += "    - 1: test the functions to see if they run"
+runTypeHelp += "    - 2: generate, save, build graph for, and sparsify graph for single subject"
+parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=1)
 
-# Train the model
-print "Training the knn model..."
-K._LEARNING_PHASE = tf.constant(0)
-model = trainModel(X_train, y_train, X_test, y_test)
-print "KNN model trained!"
+if args.runtype == 0: 
+    N = 7292  # number of patients - should be 7292
+    totalNodes = 500  # total number of nodes for each patient - should be 500
+    mdFN = "metadata-simulated"
+    saveSimulatedMetadata(fn, numSubjs, numNodes)
 
-# get the data for generating the abnormal nodes
-mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
-mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
-mnistOnes = X_test[mnistOneIndices]
-mnistZeros = X_test[mnistZeroIndices]
+elif args.runtype == 1:
+    # Load MNIST data
+    # the data, shuffled and split between train and test sets
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    X_train = X_train.reshape(60000, 784)
+    X_test = X_test.reshape(10000, 784)
+    X_train = X_train.astype('float32')
+    X_test = X_test.astype('float32')
+    X_train /= 255
+    X_test /= 255
 
-# Generate the simulated patients
-N = 100  # number of patients - should be 7292
-totalNodes = 50  # total number of nodes for each patient - should be 500
-patients = [[] for i in xrange(N)]
-y = [ 0 for i in xrange(N)]
-print "Generating simulated patients..."
-for i in xrange(N):
-    # generate y
-    y[i] = randint(0, totalNodes)
-    # generate the nodes
-    patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+    # Train the model
+    print "Training the knn model..."
+    K._LEARNING_PHASE = tf.constant(0)
+    model = trainModel(X_train, y_train, X_test, y_test)
+    print "KNN model trained!"
 
-print "Patients have been simulated!"
+    # get the data for generating the abnormal nodes
+    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
+    mnistOnes = X_test[mnistOneIndices]
+    mnistZeros = X_test[mnistZeroIndices]
 
-# Compute the pairwise similarity between patients using Dougal code
-print "Calculating similarities..."
-sims = computePairwiseSimilarities(patients, y)
-print "Similarities calculated!"
+    # Generate the simulated patients
+    N = 100  # number of patients - should be 7292
+    totalNodes = 50  # total number of nodes for each patient - should be 500
+    patients = [[] for i in xrange(N)]
+    y = [ 0 for i in xrange(N)]
+    print "Generating simulated patients..."
+    for i in xrange(N):
+        # generate y
+        y[i] = randint(0, totalNodes)
+        # generate the nodes
+        patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
 
-# Build the nearest neighbor graph for the patients
+    print "Patients have been simulated!"
+
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities(patients, y)
+    print "Similarities calculated!"
+
+    # Build the nearest neighbor graph for the patients
+
+elif args.runtype == 2:
+    # generate, save, build graph for, and sparsify graph for single subject
+
+    # generate the subject
+    # save the subject
+    # build the graph for the subject
+    print "About to start building the graphs in parallel..."
+    subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data, args.neighbors) for i in xrange(1))
+    print "Finished buliding the graphs!"
+    # sparsify the graph for the subject
+    # save the sparse graph for the subject
