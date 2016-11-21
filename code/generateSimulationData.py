@@ -2,7 +2,7 @@ import numpy as np
 import argparse
 from joblib import Parallel, delayed
 
-# simulation data
+# generating simulated data
 from keras.datasets import mnist
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
@@ -14,14 +14,21 @@ import tensorflow as tf
 # random numbers
 from random import randint
 
+# saving/loading simulated data
+import pickle as pk
+
 # Dougal code imports
 from skl_groups.features import Features
 from sklearn.pipeline import Pipeline
 from skl_groups.divergences import KNNDivergenceEstimator
 from skl_groups.kernels import PairwisePicker, Symmetrize, RBFize, ProjectPSD
 
-# from buildGraphSingleSubj.py
+# from buildGraphSingleSubj.py (builing knn graphs)
 from cyflann import *
+
+# from compileGraph.py (sparse graphs)
+import scipy.sparse as sp
+from scipy import *
 
 """
 The purpose of this file is to generate a set of simulated data for the lung 
@@ -36,6 +43,8 @@ Functions:
 Notes:
 - When extracting features and building the nn model, should the learning phase
   be the same or different? (0 for test and 1 for train)
+
+
 """
 #--------------------------------------------------------------------------
 # New Functions Which Do Cool Math/ML Stuff
@@ -124,7 +133,7 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
     Generate the abnormal and normal nodes for a single patient
 
     Inputs:
-    - totalAbnormal: the number of abnormal nodes to generate
+    - y: the number of abnormal nodes to generate
     - totalNodes: the total number of nodes to generate
     - digits: MNIST data
     - mnistOnes, mnistZeros: data used to generate abnormal nodes
@@ -264,6 +273,68 @@ def buildSubjectGraph(subj, patients, neighbors=3):
     return subjDB
 
 
+def compileGraphSingleSubj(superMetaData, subjIdx, subjGraph, numSimNodes=3):
+    """ 
+    Extract the data from a single subject into a massive matrix
+    Matrix size is # elements in DB subject x # elements in query subject
+
+    Inputs:
+    - subjGraph: data loaded from h5 files
+    - superMetaData: data about the size and index of the query subjects
+                    (from getSubjectSizes())
+    - subjIdx: number for identifying the current subject
+    - numSimNodes (opt): how many similar nodes will be placed in the matrix
+
+    Returns:
+    """
+    # set up initial graph:
+    fn = str(subjIdx).zfill(4)
+    # subjGraph = loadDenseSubjectGraph("/pylon2/ms4s88p/jms565/subjectGraphs/"+fn)
+    # subjGraph = loadDenseSubjectGraph("./individualSubjectGraphs/"+fn)
+
+    # make initial sparse matrix here
+    j = 0
+    sparseSubj = buildBlock(subjGraph[j], subjIdx, j, superMetaData)
+    # for each query subject in the h5 file for one db subject
+    for j in xrange(len(subjGraph)-1):
+        # make the block for subjects i-j
+        sparseJ = buildBlock(subjGraph[j+1], subjIdx, j+1, superMetaData)
+        # concatenate w/ row matrix
+        sparseSubj = sp.hstack((sparseSubj, sparseJ), format='csr')
+        
+    print "Finished building single graph for DB subject " + str(subjIdx) + "!"
+    return sparseSubj
+
+
+def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
+    """
+    Build a single block (subj_i-subj_j) of the subj_i matrix
+
+    Inputs:
+    - graphIJ: 
+    - i: index of subj i
+    - j: index of subj j
+    - superMetaData: metadata of the dataset
+    - numSimNodes: 3 by default, can be changed for different dataset
+
+    Returns:
+    - sparse matrix full of the nonzero values in that block
+    """
+
+    # set up shape of sparse matrix
+    shapeIJ = (superMD["subjectSuperPixels"][i], superMD["subjectSuperPixels"][j])
+
+    # if i and j are the same, don't take the distance between the node and itself
+    # if graphIJ['dists'][0][0]==0:
+    #     rows = graphIJ["nodes"][:, 1:numSimNodes+1]
+    #     dists = graphIJ["dists"][:, 1:numSimNodes+1]
+    # else:
+    rows = graphIJ["nodes"][:, 0:numSimNodes]
+    dists = graphIJ["dists"][:, 0:numSimNodes]
+    # set up values for the columns of the matrix (total # cols = # pix in subj j)
+    cols = np.matrix([[k] * numSimNodes for k in xrange(superMD["subjectSuperPixels"][j])])
+
+    return sp.csr_matrix((list(dists.flat),(list(rows.flat), list(cols.flat))), shape=shapeIJ)
 
 #--------------------------------------------------------------------------
 # Saving and Loading Files
@@ -271,7 +342,7 @@ def buildSubjectGraph(subj, patients, neighbors=3):
 
 def saveSimSubject(fn, patient, y):
     """
-    Function to save the generated patient features/nodes.
+    Function to save the generated patient features/nodes using pickle
 
     Inputs:
     - fn: filename/directory to save to (extensionless)
@@ -279,8 +350,14 @@ def saveSimSubject(fn, patient, y):
 
     Returns: nothing
     """
-    np.savez(fn, nodes=patient, numAb=y)
-    print "Saved the data for a simulated patient to a .npz file."
+    cucumber = {
+        "patients": patient,
+        "classes": y
+    }
+    with open(fn+".data.p", "wb") as f:
+        pk.dump(cucumber, f)
+    f.close()
+    print "Saved the data for the simulated patients using pickle."
 
 
 def loadSimSubject(fn):
@@ -291,12 +368,14 @@ def loadSimSubject(fn):
     - fn: filename/directory to load from (extensionless)
 
     Returns:
-    - patient: loaded node/feature information
-    - y: number of abnormal nodes in the patient
+    - patients: loaded node/feature information
+    - classes: number of abnormal nodes in the patient
     """
-    loader = np.load(fn+".npz")
+    with open(fn+".data.p", "rb") as f:
+        loader = pk.load(f)
+    f.close()
     print "Simluated patient data loaded!"
-    return loader['nodes'], loader['numAb']
+    return loader['patients'], loader['classes']
 
 
 def saveSimilarities(fn, sims):
@@ -394,13 +473,13 @@ def saveSimulatedMetadata(fn, numSubjs, numNodes):
     superPixelIndexingStart = np.zeros(numSubjs)
     superPixelIndexingEnd = np.zeros(numSubjs)
 
-    for i in xrange(len(numSubjSuperPixels)):
+    for i in xrange(numSubjs):
         if i == 0 :
             superPixelIndexingStart[i] = 0
-            superPixelIndexingEnd[i] = numSubjSuperPixels[i]-1
+            superPixelIndexingEnd[i] = subjSP[i]-1
         else:
-            superPixelIndexingStart[i] = numSubjSuperPixels[i-1] + superPixelIndexingStart[i-1]
-            superPixelIndexingEnd[i] = numSubjSuperPixels[i] + superPixelIndexingEnd[i-1]
+            superPixelIndexingStart[i] = subjSP[i-1] + subjSP[i-1]
+            superPixelIndexingEnd[i] = subjSP[i] + subjSP[i-1]
 
     np.savez(fn, totalSP=totalSP, subjSP=subjSP, indStart=superPixelIndexingStart, indEnd=superPixelIndexingEnd)
 
@@ -419,7 +498,7 @@ def loadSimulatedMetadata(fn):
         - superPixelIndexingStart: the start index of each subject in the list
         - superPixelIndexingEnd: the end index of each subject in the list
     """
-    loader = np.load(filename+".npz")
+    loader = np.load(fn+".npz")
     md = {
         "totalSuperPixels": loader['totalSP'],
         "subjectSuperPixels": loader['subjSP'],
@@ -442,14 +521,18 @@ parser.add_argument("-d", "--debug", help="flag to print out helpful output", ty
 runTypeHelp = "which type of program to run"
 runTypeHelp += "    - 0: generate metadata"
 runTypeHelp += "    - 1: test the functions to see if they run"
-runTypeHelp += "    - 2: generate, save, build graph for, and sparsify graph for single subject"
+runTypeHelp += "    - 2: generate all 7292 simulated patients"
+runTypeHelp += "    - 3: generate, save, build graph for, and sparsify graph for single subject"
 parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=1)
+
+args = parser.parse_args()
 
 if args.runtype == 0: 
     N = 7292  # number of patients - should be 7292
     totalNodes = 500  # total number of nodes for each patient - should be 500
     mdFN = "metadata-simulated"
-    saveSimulatedMetadata(fn, numSubjs, numNodes)
+    saveSimulatedMetadata(mdFN, N, totalNodes)
+    loadSimulatedMetadata(mdFN)
 
 elif args.runtype == 1:
     # Load MNIST data
@@ -475,8 +558,8 @@ elif args.runtype == 1:
     mnistZeros = X_test[mnistZeroIndices]
 
     # Generate the simulated patients
-    N = 100  # number of patients - should be 7292
-    totalNodes = 50  # total number of nodes for each patient - should be 500
+    N = 10  # number of patients - should be 7292
+    totalNodes = 500  # total number of nodes for each patient - should be 500
     patients = [[] for i in xrange(N)]
     y = [ 0 for i in xrange(N)]
     print "Generating simulated patients..."
@@ -493,13 +576,78 @@ elif args.runtype == 1:
     sims = computePairwiseSimilarities(patients, y)
     print "Similarities calculated!"
 
-    # Build the nearest neighbor graph for the patients
+    # Build the nearest neighbor graph for the patient
+    print "About to build a nearest neighbor graph for patient 0..."
+    graph = buildSubjectGraph(0, patients)
+    print "KNN graph built!"
+
+    # Sparsify the nearest neighbor graph for the patient
+    print "Sparsifying the graph for patient 0..."
+    mdFN = "metadata-simulated"
+    metadata = loadSimulatedMetadata(mdFN)
+    sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
+    print "Sparse graph generated!"
+
+    # Saving the sparse graph
+    print "Saving the sparse graph for patient 0..."
+    sparseFN = "simulatedData/sparseGraphs/0000"
+    saveSparseGraph(sparseGraph, sparseFN)
+    print "Sparse graph saved!"
+    loadedSparseGraph = loadSparseGraph(sparseFN)
+    print "Sparse graph loaded!"
 
 elif args.runtype == 2:
-    # generate, save, build graph for, and sparsify graph for single subject
+    # generate all subjects
+    # load the data, shuffled and split between train and test sets
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    X_train = X_train.reshape(60000, 784)
+    X_test = X_test.reshape(10000, 784)
+    X_train = X_train.astype('float32')
+    X_test = X_test.astype('float32')
+    X_train /= 255
+    X_test /= 255
 
-    # generate the subject
+    # Train the model
+    print "Training the knn model..."
+    K._LEARNING_PHASE = tf.constant(0)
+    model = trainModel(X_train, y_train, X_test, y_test)
+    print "KNN model trained!"
+
+    # get the data for generating the abnormal nodes
+    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
+    mnistOnes = X_test[mnistOneIndices]
+    mnistZeros = X_test[mnistZeroIndices]
+
+    totalNodes = 500
+    N = 7292
+    N = 10
+    # generate the subjects
+    patients = [[] for i in xrange(N)]
+    y = [ 0 for i in xrange(N)]
+    print "Generating simulated patients..."
+    for i in xrange(N):
+        # generate y
+        y[i] = randint(0, totalNodes)
+        # generate the nodes
+        patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+
+    print "Patients have been simulated!"
+
     # save the subject
+    # FIGURE OUT WHERE TO SAVE THE SUBJECTS
+    patientFN = "./simulatedData/simulatedSubjects"
+    # for i in xrange(N):
+    saveSimSubject(patientFN, patients, y)
+    loadedSubjs = loadSimSubject(patientFN)
+    # chose to save all in one file because that's how the build subject code works (plus one less for loop)
+
+elif args.runtype == 3:
+    # parallelized part
+    # generate, save, build graph for, and sparsify graph for single subject
+    # read in subject graph
+    patientsFN = './simulatedData/simulatedSubjects'
+    graph = loadSimSubject(fn)
     # build the graph for the subject
     print "About to start building the graphs in parallel..."
     subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data, args.neighbors) for i in xrange(1))
