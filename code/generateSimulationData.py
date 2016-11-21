@@ -11,9 +11,6 @@ from keras.utils import np_utils
 from keras.layers.core import K
 import tensorflow as tf
 
-# random numbers
-from random import randint
-
 # saving/loading simulated data
 import pickle as pk
 
@@ -113,9 +110,9 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     - abnormal: the abnormal node 
     """
     # generate a random number to select a 1 image
-    idx1 = randint(0, len(mnistOnes)-1)
+    idx1 = np.random.randint(0, len(mnistOnes)-1)
     # generate a random number to select a 0 image
-    idx0 = randint(0, len(mnistZeros)-1)
+    idx0 = np.random.randint(0, len(mnistZeros)-1)
     # select a 1 image
     v1 = mnistOnes[idx1]
     # select a 0 image
@@ -147,6 +144,7 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
     for i in xrange(y):
         # generate a single abnormal node
         abnormal = generateAbnormalNode(mnistOnes, mnistZeros)
+        # add small amount of noise to the data sample
         # extract the feature
         feats = extractFeatures(abnormal.reshape((1, 784)), model)
         # add the feature for that node to the list
@@ -155,9 +153,14 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
     # create totalNodes-y normal nodes
     for i in xrange(y, totalNodes):
         # generate the random number
-        num = randint(0, len(digits)-1)
+        num = np.random.randint(0, len(digits)-1)
+        # add small amount of noise to the data sample
+        patch0 = digits[num].reshape((1, 784))
+        patch = patch0 + np.random.rand(1, 784)*patch0.max()/12.0
+        idx = patch > patch0.max()
+        patch[idx] = patch0.max()
         # extract the feature
-        feats = extractFeatures(digits[num].reshape((1, 784)), model)
+        feats = extractFeatures(patch, model)
         # add the feature for that node to the list
         nodes[i] = feats
 
@@ -540,10 +543,16 @@ elif args.runtype == 1:
     (X_train, y_train), (X_test, y_test) = mnist.load_data()
     X_train = X_train.reshape(60000, 784)
     X_test = X_test.reshape(10000, 784)
-    X_train = X_train.astype('float32')
-    X_test = X_test.astype('float32')
+    A = np.vstack((X_test, X_train[0:25000]))
+    A_y = np.hstack((y_test, y_train[0:25000]))
+    B = X_train[25000:]
+    B_y = y_train[25000:]
+    X_train = B.astype('float32')
+    X_test = A.astype('float32')
     X_train /= 255
     X_test /= 255
+    y_train = B_y
+    y_test = A_y
 
     # Train the model
     print "Training the knn model..."
@@ -565,7 +574,7 @@ elif args.runtype == 1:
     print "Generating simulated patients..."
     for i in xrange(N):
         # generate y
-        y[i] = randint(0, totalNodes)
+        y[i] = np.random.randint(0, totalNodes)
         # generate the nodes
         patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
 
@@ -628,7 +637,7 @@ elif args.runtype == 2:
     print "Generating simulated patients..."
     for i in xrange(N):
         # generate y
-        y[i] = randint(0, totalNodes)
+        y[i] = np.random.randint(0, totalNodes)
         # generate the nodes
         patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
 
