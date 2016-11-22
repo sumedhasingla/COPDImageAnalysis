@@ -4,7 +4,7 @@ from joblib import Parallel, delayed
 
 # generating simulated data
 from keras.datasets import mnist
-from keras.models import Sequential
+from keras.models import *
 from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.utils import np_utils
@@ -12,6 +12,7 @@ from keras.layers.core import K
 import tensorflow as tf
 
 # saving/loading simulated data
+import h5py  # for saving/loading features
 import pickle as pk
 
 # Dougal code imports
@@ -64,7 +65,7 @@ def trainModel(X_train, y_train, X_test, y_test):
 
     batch_size = 128
     nb_classes = 10
-    nb_epoch = 5  # supposed to be 20 - for real
+    nb_epoch = 20  # supposed to be 20 - for real
 
     print(X_train.shape[0], 'train samples')
     print(X_test.shape[0], 'test samples')
@@ -95,6 +96,8 @@ def trainModel(X_train, y_train, X_test, y_test):
     print('Test score:', score[0])
     print('Test accuracy:', score[1])
 
+    # fn = "simulatedData/keras-model"
+    # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
 
@@ -125,16 +128,14 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     return abnormal
 
 
-def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
+def simulateSinglePatient(y, totalNodes, feats):
     """
     Generate the abnormal and normal nodes for a single patient
 
     Inputs:
     - y: the number of abnormal nodes to generate
     - totalNodes: the total number of nodes to generate
-    - digits: MNIST data
-    - mnistOnes, mnistZeros: data used to generate abnormal nodes
-    - model to use for generating features
+    - feats: previously extracted features of the X_test dataset
 
     Returns:
     - nodes: list of normal and abnormal nodes
@@ -154,7 +155,7 @@ def simulateSinglePatient(y, totalNodes, digits, mnistOnes, mnistZeros, model):
     for i in xrange(y, totalNodes):
         # generate the random number
         num = np.random.randint(0, len(digits)-1)
-        # add small amount of noise to the data sample
+        # add small amount of noise to the data sample - this is Gaussian not salt and pepper
         patch0 = digits[num].reshape((1, 784))
         patch = patch0 + np.random.rand(1, 784)*patch0.max()/12.0
         idx = patch > patch0.max()
@@ -454,7 +455,7 @@ def loadSparseGraph(fn):
     return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']), shape=loader['shape'])
 
 
-def saveSimulatedMetadata(fn, numSubjs, numNodes):
+def saveSimMetadata(fn, numSubjs, numNodes):
     """
     Generate and save the metadata needed for the simulated patient dataset.
 
@@ -481,13 +482,13 @@ def saveSimulatedMetadata(fn, numSubjs, numNodes):
             superPixelIndexingStart[i] = 0
             superPixelIndexingEnd[i] = subjSP[i]-1
         else:
-            superPixelIndexingStart[i] = subjSP[i-1] + subjSP[i-1]
-            superPixelIndexingEnd[i] = subjSP[i] + subjSP[i-1]
+            superPixelIndexingStart[i] = superPixelIndexingStart[i-1] + subjSP[i-1]
+            superPixelIndexingEnd[i] = superPixelIndexingStart[i] + subjSP[i-1]
 
     np.savez(fn, totalSP=totalSP, subjSP=subjSP, indStart=superPixelIndexingStart, indEnd=superPixelIndexingEnd)
 
 
-def loadSimulatedMetadata(fn):
+def loadSimMetadata(fn):
     """
     Load metadata for simulated dataset from file.
 
@@ -511,6 +512,46 @@ def loadSimulatedMetadata(fn):
     return md
 
 
+def saveFeatures(fn, feats, digitNumbers):
+    """
+    After extracting the features of the MNIST test set, save them
+    to a .h5 file.
+
+    Inputs:
+    - fn: filename to save to (extensionless)
+    - feats: list/nparray of features to save
+
+    Returns: nothing
+    """
+    fn = fn + ".h5"
+    print fn
+    with h5py.File(fn, "w") as hf:
+        hf.create_dataset("feats", data=feats, compression='gzip', compression_opts=7)
+        hf.create_dataset("numbers", data=digitNumbers, compression='gzip', compression_opts=7)
+
+    print "Features file saved!"
+
+def loadFeatures(fn):
+    """
+    Load the features of the MNIST test set.
+
+    Inputs:
+    - fn: the filename to load from (extensionless)
+
+    Returns:
+    - feats: list/nparray of features
+    """
+    fn = fn + ".h5"
+    print fn
+    with h5py.File(fn, "r") as hf:
+        a = hf.get('feats')
+        feats = np.array(a)
+        b = hf.get('numbers')
+        numbers = np.array(b)
+
+    return feats, numbers
+    print "Features loaded!"
+
 #--------------------------------------------------------------------------
 # Actually do stuff...
 #--------------------------------------------------------------------------
@@ -520,7 +561,7 @@ parser = argparse.ArgumentParser()
 # Adding arguments to parse
 parser.add_argument("-s", "--subject", help="the index of the subject in the list", type=int)
 parser.add_argument("-c", "--cores", help="the number of cores/jobs to use in parallel", type=int, default=2)
-parser.add_argument("-d", "--debug", help="flag to print out helpful output", type=int, default=0)  # 1 for debugging messages
+# parser.add_argument("-d", "--debug", help="flag to print out helpful output", type=int, default=0)  # 1 for debugging messages
 runTypeHelp = "which type of program to run"
 runTypeHelp += "    - 0: generate metadata"
 runTypeHelp += "    - 1: test the functions to see if they run"
@@ -534,12 +575,93 @@ if args.runtype == 0:
     N = 7292  # number of patients - should be 7292
     totalNodes = 500  # total number of nodes for each patient - should be 500
     mdFN = "metadata-simulated"
-    saveSimulatedMetadata(mdFN, N, totalNodes)
-    loadSimulatedMetadata(mdFN)
+    saveSimMetadata(mdFN, N, totalNodes)
+    loadSimMetadata(mdFN)
 
 elif args.runtype == 1:
     # Load MNIST data
     # the data, shuffled and split between train and test sets
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    X_train = X_train.reshape(60000, 784)
+    X_test = X_test.reshape(10000, 784)
+    A = np.vstack((X_test, X_train[0:25000]))
+    A_y = np.hstack((y_test, y_train[0:25000]))
+    B = X_train[25000:]
+    B_y = y_train[25000:]
+    X_train = B.astype('float32')
+    X_test = A.astype('float32')
+    X_train /= 255
+    X_test /= 255
+    y_train = B_y
+    y_test = A_y
+
+    # # Train the model
+    # print "Training the knn model..."
+    # K._LEARNING_PHASE = tf.constant(0)
+    # model = trainModel(X_train, y_train, X_test, y_test)
+    # print "KNN model trained!"
+
+    # Load a previously trained keras model
+    kerasFN = "simulatedData/keras-model"
+    model = load_model(kerasFN)
+
+    # Generate the features for the test data set
+    feats = extractFeatures(X_test, model)
+    # Save the features and their classes 
+    featsFN = "simulatedData/node-features"
+    saveFeatures(featsFN, feats, y_test) # how to get y in here?
+    # Load the feature and their classes
+    loadedFeats, loadedY = loadFeatures(featsFN)
+
+    """# get the data for generating the abnormal nodes
+    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
+    mnistOnes = X_test[mnistOneIndices]
+    mnistZeros = X_test[mnistZeroIndices]
+    """
+
+    # # Generate the simulated patients
+    # N = 20  # number of patients - should be 7292
+    # totalNodes = 500  # total number of nodes for each patient - should be 500
+    # patients = [[] for i in xrange(N)]
+    # y = [ 0 for i in xrange(N)]
+    # print "Generating simulated patients..."
+    # for i in xrange(N):
+    #     # generate y
+    #     y[i] = np.random.randint(0, totalNodes)
+    #     # generate the nodes
+    #     patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+
+    # print "Patients have been simulated!"
+
+    # # Compute the pairwise similarity between patients using Dougal code
+    # print "Calculating similarities..."
+    # sims = computePairwiseSimilarities(patients, y)
+    # print "Similarities calculated!"
+
+    # # Build the nearest neighbor graph for the patient
+    # print "About to build a nearest neighbor graph for patient 0..."
+    # graph = buildSubjectGraph(0, patients)
+    # print "KNN graph built!"
+
+    # # Sparsify the nearest neighbor graph for the patient
+    # print "Sparsifying the graph for patient 0..."
+    # mdFN = "metadata-simulated"
+    # metadata = loadSimulatedMetadata(mdFN)
+    # sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
+    # print "Sparse graph generated!"
+
+    # # Saving the sparse graph
+    # print "Saving the sparse graph for patient 0..."
+    # sparseFN = "simulatedData/sparseGraphs/0000"
+    # saveSparseGraph(sparseGraph, sparseFN)
+    # print "Sparse graph saved!"
+    # loadedSparseGraph = loadSparseGraph(sparseFN)
+    # print "Sparse graph loaded!"
+
+elif args.runtype == 2:
+    # generate all subjects
+    # load the data, shuffled and split between train and test sets
     (X_train, y_train), (X_test, y_test) = mnist.load_data()
     X_train = X_train.reshape(60000, 784)
     X_test = X_test.reshape(10000, 784)
@@ -566,71 +688,9 @@ elif args.runtype == 1:
     mnistOnes = X_test[mnistOneIndices]
     mnistZeros = X_test[mnistZeroIndices]
 
-    # Generate the simulated patients
-    N = 10  # number of patients - should be 7292
-    totalNodes = 500  # total number of nodes for each patient - should be 500
-    patients = [[] for i in xrange(N)]
-    y = [ 0 for i in xrange(N)]
-    print "Generating simulated patients..."
-    for i in xrange(N):
-        # generate y
-        y[i] = np.random.randint(0, totalNodes)
-        # generate the nodes
-        patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
-
-    print "Patients have been simulated!"
-
-    # Compute the pairwise similarity between patients using Dougal code
-    print "Calculating similarities..."
-    sims = computePairwiseSimilarities(patients, y)
-    print "Similarities calculated!"
-
-    # Build the nearest neighbor graph for the patient
-    print "About to build a nearest neighbor graph for patient 0..."
-    graph = buildSubjectGraph(0, patients)
-    print "KNN graph built!"
-
-    # Sparsify the nearest neighbor graph for the patient
-    print "Sparsifying the graph for patient 0..."
-    mdFN = "metadata-simulated"
-    metadata = loadSimulatedMetadata(mdFN)
-    sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
-    print "Sparse graph generated!"
-
-    # Saving the sparse graph
-    print "Saving the sparse graph for patient 0..."
-    sparseFN = "simulatedData/sparseGraphs/0000"
-    saveSparseGraph(sparseGraph, sparseFN)
-    print "Sparse graph saved!"
-    loadedSparseGraph = loadSparseGraph(sparseFN)
-    print "Sparse graph loaded!"
-
-elif args.runtype == 2:
-    # generate all subjects
-    # load the data, shuffled and split between train and test sets
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    X_train = X_train.reshape(60000, 784)
-    X_test = X_test.reshape(10000, 784)
-    X_train = X_train.astype('float32')
-    X_test = X_test.astype('float32')
-    X_train /= 255
-    X_test /= 255
-
-    # Train the model
-    print "Training the knn model..."
-    K._LEARNING_PHASE = tf.constant(0)
-    model = trainModel(X_train, y_train, X_test, y_test)
-    print "KNN model trained!"
-
-    # get the data for generating the abnormal nodes
-    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
-    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
-    mnistOnes = X_test[mnistOneIndices]
-    mnistZeros = X_test[mnistZeroIndices]
-
     totalNodes = 500
     N = 7292
-    N = 10
+    N = 20
     # generate the subjects
     patients = [[] for i in xrange(N)]
     y = [ 0 for i in xrange(N)]
@@ -645,10 +705,11 @@ elif args.runtype == 2:
 
     # save the subject
     # FIGURE OUT WHERE TO SAVE THE SUBJECTS
-    patientFN = "./simulatedData/simulatedSubjects"
+    patientsFN = "./simulatedData/simulatedSubjects"
+    # patientsFN = '/pylon1/ms4s88p/jms565/simulatedSubjects'
     # for i in xrange(N):
-    saveSimSubject(patientFN, patients, y)
-    loadedSubjs = loadSimSubject(patientFN)
+    saveSimSubject(patientsFN, patients, y)
+    loadedSubjs = loadSimSubject(patientsFN)
     # chose to save all in one file because that's how the build subject code works (plus one less for loop)
 
 elif args.runtype == 3:
@@ -656,10 +717,18 @@ elif args.runtype == 3:
     # generate, save, build graph for, and sparsify graph for single subject
     # read in subject graph
     patientsFN = './simulatedData/simulatedSubjects'
-    graph = loadSimSubject(fn)
+    # patientsFN = '/pylon1/ms4s88p/jms565/simulatedSubjects'
+    loadedSubjs = loadSimSubject(patientsFN)
+    data = loadedSubjs[0]
+    classes = loadedSubjs[1]
     # build the graph for the subject
     print "About to start building the graphs in parallel..."
-    subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data, args.neighbors) for i in xrange(1))
+    subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data) for i in xrange(1))
     print "Finished buliding the graphs!"
     # sparsify the graph for the subject
+    md = loadSimMetadata
+    sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph, numSimNodes=3))
     # save the sparse graph for the subject
+    sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
+    # sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs' + str(args.subject).zfill(4)
+    saveSparseGraph(sparseGraph, sparseFN)
