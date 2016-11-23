@@ -100,7 +100,6 @@ def trainModel(X_train, y_train, X_test, y_test):
     # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
-
 def generateAbnormalNode(mnistOnes, mnistZeros):
     """
     Choose 2 images from the MNIST dataset to combine into an "abnormal" node
@@ -123,7 +122,6 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
     abnormal = v1+v0
     return abnormal
-
 
 def simulateSinglePatient(y, feats, mnistOnes, mnistZeros, totalNodes=500):
     """
@@ -163,7 +161,6 @@ def simulateSinglePatient(y, feats, mnistOnes, mnistZeros, totalNodes=500):
 
     return np.vstack(nodes)
 
-
 def extractFeatures(X, model):
     """
     Extract the features of X using the activation layer of the model
@@ -180,7 +177,6 @@ def extractFeatures(X, model):
     layer_output = get_last_layer_output([X, 0])[0]
 
     return layer_output
-
 
 def computePairwiseSimilarities(patients, y):
     """
@@ -215,7 +211,6 @@ def computePairwiseSimilarities(patients, y):
     # return the pairwise similarities between the bags (patients)
     sims = distEstModel.fit_transform(feats)
     return sims
-
 
 #--------------------------------------------------------------------------
 # Imported Functions from Previous Work (WARNING: MIGHT BE MODIFIED)
@@ -272,7 +267,6 @@ def buildSubjectGraph(subj, patients, neighbors=3):
     print "Subject level database complete for subject " + str(subj) + "!"
     return subjDB
 
-
 def compileGraphSingleSubj(superMetaData, subjIdx, subjGraph, numSimNodes=3):
     """ 
     Extract the data from a single subject into a massive matrix
@@ -304,7 +298,6 @@ def compileGraphSingleSubj(superMetaData, subjIdx, subjGraph, numSimNodes=3):
         
     print "Finished building single graph for DB subject " + str(subjIdx) + "!"
     return sparseSubj
-
 
 def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
     """
@@ -359,7 +352,6 @@ def saveSimSubject(fn, patient, y):
     f.close()
     print "Saved the data for the simulated patients using pickle."
 
-
 def loadSimSubject(fn):
     """
     Load a previously saved simulated subject from a .npz file.
@@ -377,7 +369,6 @@ def loadSimSubject(fn):
     print "Simluated patient data loaded!"
     return loader['patients'], loader['classes']
 
-
 def saveSimilarities(fn, sims):
     """
     Save the similarity matrix to a .npz file.
@@ -390,7 +381,6 @@ def saveSimilarities(fn, sims):
     """
     np.savez(fn, similarities=sims)
     print "Saved the similarities to a file."
-
 
 def loadSimilarities(fn):
     """
@@ -406,7 +396,6 @@ def loadSimilarities(fn):
     print "Similarities loaded!"
     return loader['similarities']
 
-
 def saveSparseGraph(graph, fn):
     """
     IMPORTED!
@@ -420,8 +409,7 @@ def saveSparseGraph(graph, fn):
     """
     np.savez(fn, data=graph.data, indices=graph.indices, indptr=graph.indptr, shape=graph.shape)
     print "Saved the files"
-    
-    
+        
 def loadSparseGraph(fn):
     """
     IMPORTED
@@ -449,7 +437,6 @@ def loadSparseGraph(fn):
     loader = np.load(fn+".npz")
     print "Sparse graph loaded"
     return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']), shape=loader['shape'])
-
 
 def saveSimMetadata(fn, numSubjs, numNodes):
     """
@@ -483,7 +470,6 @@ def saveSimMetadata(fn, numSubjs, numNodes):
 
     np.savez(fn, totalSP=totalSP, subjSP=subjSP, indStart=superPixelIndexingStart, indEnd=superPixelIndexingEnd)
 
-
 def loadSimMetadata(fn):
     """
     Load metadata for simulated dataset from file.
@@ -506,7 +492,6 @@ def loadSimMetadata(fn):
         "superPixelIndexingEnd": loader['indEnd']
     }
     return md
-
 
 def saveFeatures(fn, feats, digitNumbers):
     """
@@ -598,15 +583,15 @@ elif args.runtype == 1:
     # print "KNN model trained!"
 
     # Load a previously trained keras model
-    kerasFN = "simulatedData/keras-model"
-    model = load_model(kerasFN)
+    # kerasFN = "simulatedData/keras-model"
+    # model = load_model(kerasFN)
 
-    # Generate the features for the test data set
-    feats = extractFeatures(X_test, model)
-    # Save the features and their classes 
+    # # Generate the features for the test data set
+    # feats = extractFeatures(X_test, model)
+    # # Save the features and their classes 
     featsFN = "simulatedData/node-features"
-    saveFeatures(featsFN, feats, y_test) # how to get y in here?
-    # Load the feature and their classes
+    # saveFeatures(featsFN, feats, y_test) # how to get y in here?
+    # # Load the feature and their classes
     loadedFeats, loadedY = loadFeatures(featsFN)
 
     # get the data for generating the abnormal nodes
@@ -615,65 +600,71 @@ elif args.runtype == 1:
     mnistOnes = loadedFeats[mnistOneIndices]
     mnistZeros = loadedFeats[mnistZeroIndices]
     
-    # Generate the simulated patients
-    N = 20  # number of patients - should be 7292
-    totalNodes = 500  # total number of nodes for each patient - should be 500
-    patients = [None]*N
-    y = [ 0 for i in xrange(N)]
-    # generate list of permuted indices
-    permutations = [np.random.permutation(len(loadedFeats))]*100
-    permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
-    print "Generating simulated patients..."
-    idx = 0
-    for i in xrange(N):
-        # generate y
-        y[i] = np.random.randint(0, totalNodes)
-        # select subset of indices from list
-        subset = permutations[idx:idx+totalNodes-y[i]]
-        # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-        normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
-        if y[i] > 0.0: 
-            abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
-            # add the generated nodes to the list for that patient
-            patients[i] = np.concatenate((abnormalNodes, normalNodes))
-        else: 
-            patients[i] = normalNodes
-        # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
-        # increment index counter
-        idx += totalNodes-y[i]
-        # Woo sanity check
-        print "Iteration " + str(i)
-        print "     Updated index: " + str(idx)
-        print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
-        print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
-        print "      Len(results): " + str(len(patients[i]))
+    # # Generate the simulated patients
+    # N = 7292  # number of patients - should be 7292
+    # totalNodes = 500  # total number of nodes for each patient - should be 500
+    # patients = [None]*N
+    # y = [ 0 for i in xrange(N)]
+    # # generate list of permuted indices
+    # permutations = [np.random.permutation(len(loadedFeats))]*100
+    # permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
+    # print "Generating simulated patients..."
+    # idx = 0
+    # for i in xrange(N):
+    #     # generate y
+    #     y[i] = np.random.randint(0, totalNodes)
+    #     # select subset of indices from list
+    #     subset = permutations[idx:idx+totalNodes-y[i]]
+    #     # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
+    #     normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+    #     if y[i] > 0.0: 
+    #         abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
+    #         # add the generated nodes to the list for that patient
+    #         patients[i] = np.concatenate((abnormalNodes, normalNodes))
+    #     else: 
+    #         patients[i] = normalNodes
+    #     # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
+    #     # increment index counter
+    #     idx += totalNodes-y[i]
+    #     # Woo sanity check
+    #     print "Iteration " + str(i)
+    #     print "     Updated index: " + str(idx)
+    #     print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+    #     print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
+    #     print "      Len(results): " + str(len(patients[i]))
 
-    print "Patients have been simulated!"
+    # print "Patients have been simulated!"
 
-    # # Compute the pairwise similarity between patients using Dougal code
-    # print "Calculating similarities..."
-    # sims = computePairwiseSimilarities(patients, y)
-    # print "Similarities calculated!"
+    # Save the patients
+    patientsFN = "./simulatedData/simulatedSubjects"
+    # saveSimSubject(patientsFN, patients, y)
+    loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
+    print "Patients have been loaded and are good to go: " + str(loadedSubjs==patients)
 
-    # # Build the nearest neighbor graph for the patient
-    # print "About to build a nearest neighbor graph for patient 0..."
-    # graph = buildSubjectGraph(0, patients)
-    # print "KNN graph built!"
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities(patients, y)
+    print "Similarities calculated!"
 
-    # # Sparsify the nearest neighbor graph for the patient
-    # print "Sparsifying the graph for patient 0..."
-    # mdFN = "metadata-simulated"
-    # metadata = loadSimulatedMetadata(mdFN)
-    # sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
-    # print "Sparse graph generated!"
+    # Build the nearest neighbor graph for the patient
+    print "About to build a nearest neighbor graph for patient 0..."
+    graph = buildSubjectGraph(0, patients)
+    print "KNN graph built!"
 
-    # # Saving the sparse graph
-    # print "Saving the sparse graph for patient 0..."
-    # sparseFN = "simulatedData/sparseGraphs/0000"
-    # saveSparseGraph(sparseGraph, sparseFN)
-    # print "Sparse graph saved!"
-    # loadedSparseGraph = loadSparseGraph(sparseFN)
-    # print "Sparse graph loaded!"
+    # Sparsify the nearest neighbor graph for the patient
+    print "Sparsifying the graph for patient 0..."
+    mdFN = "metadata-simulated"
+    metadata = loadSimMetadata(mdFN)
+    sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
+    print "Sparse graph generated!"
+
+    # Saving the sparse graph
+    print "Saving the sparse graph for patient 0..."
+    sparseFN = "simulatedData/sparseGraphs/0000"
+    saveSparseGraph(sparseGraph, sparseFN)
+    print "Sparse graph saved!"
+    loadedSparseGraph = loadSparseGraph(sparseFN)
+    print "Sparse graph loaded!"
 
 elif args.runtype == 2:
     # Load a previously trained keras model
@@ -714,15 +705,8 @@ elif args.runtype == 2:
             patients[i] = np.concatenate((abnormalNodes, normalNodes))
         else: 
             patients[i] = normalNodes
-        # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
         # increment index counter
         idx += totalNodes-y[i]
-        # # Woo sanity check
-        # print "Iteration " + str(i)
-        # print "     Updated index: " + str(idx)
-        # print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
-        # print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
-        # print "      Len(results): " + str(len(patients[i]))
 
     print "Patients have been simulated!"
 
@@ -731,7 +715,7 @@ elif args.runtype == 2:
     patientsFN = "./simulatedData/simulatedSubjects"
     # patientsFN = '/pylon1/ms4s88p/jms565/simulatedSubjects'
     # for i in xrange(N):
-    saveSimSubject(patientsFN, patients, y)
+    # saveSimSubject(patientsFN, patients, y)
     loadedSubjs = loadSimSubject(patientsFN)
     # chose to save all in one file because that's how the build subject code works (plus one less for loop)
 
@@ -739,19 +723,24 @@ elif args.runtype == 3:
     # parallelized part
     # generate, save, build graph for, and sparsify graph for single subject
     # read in subject graph
-    patientsFN = './simulatedData/simulatedSubjects'
-    # patientsFN = '/pylon1/ms4s88p/jms565/simulatedSubjects'
+    # patientsFN = './simulatedData/simulatedSubjects'
+    patientsFN = '/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects'
     loadedSubjs = loadSimSubject(patientsFN)
     data = loadedSubjs[0]
     classes = loadedSubjs[1]
     # build the graph for the subject
-    print "About to start building the graphs in parallel..."
+    print "About to start building the graph in parallel..."
     subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data) for i in xrange(1))
-    print "Finished buliding the graphs!"
+    print "Finished building the graph!"
     # sparsify the graph for the subject
-    md = loadSimMetadata
-    sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph, numSimNodes=3))
+    print "Now sparsifying the graph..."
+    # mdFN = "simulatedData/metadata-simulated"
+    mdFN = "/pylon1/ms4s88p/jms565/simulatedData/metadata-simulated"
+    md = loadSimMetadata(mdFN)
+    sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph[args.subject], numSimNodes=3) for i in xrange(1))
+    print "Finished sparsifying the graph!"
     # save the sparse graph for the subject
-    sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
-    # sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs' + str(args.subject).zfill(4)
+    # sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
+    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs' + str(args.subject).zfill(4)
     saveSparseGraph(sparseGraph, sparseFN)
+    print "Sparse graph for subect " + str(args.subject) + "!"
