@@ -122,20 +122,18 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     v0 = mnistZeros[idx0]
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
     abnormal = v1+v0
-    # threshold values above 1.0
-    idx = [i for i, v in enumerate(abnormal) if v > 1.0]
-    abnormal[idx] = 1.0
     return abnormal
 
 
-def simulateSinglePatient(y, totalNodes, feats):
+def simulateSinglePatient(y, feats, mnistOnes, mnistZeros, totalNodes=500):
     """
     Generate the abnormal and normal nodes for a single patient
 
     Inputs:
     - y: the number of abnormal nodes to generate
+    - feats: subset of previously extracted features of the X_test dataset
+    - mnistOnes, mnistZeros: features for digits 1 and 0
     - totalNodes: the total number of nodes to generate
-    - feats: previously extracted features of the X_test dataset
 
     Returns:
     - nodes: list of normal and abnormal nodes
@@ -145,9 +143,7 @@ def simulateSinglePatient(y, totalNodes, feats):
     for i in xrange(y):
         # generate a single abnormal node
         abnormal = generateAbnormalNode(mnistOnes, mnistZeros)
-        # add small amount of noise to the data sample
         # extract the feature
-        feats = extractFeatures(abnormal.reshape((1, 784)), model)
         # add the feature for that node to the list
         nodes[i] = feats
 
@@ -613,26 +609,46 @@ elif args.runtype == 1:
     # Load the feature and their classes
     loadedFeats, loadedY = loadFeatures(featsFN)
 
-    """# get the data for generating the abnormal nodes
-    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
-    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
-    mnistOnes = X_test[mnistOneIndices]
-    mnistZeros = X_test[mnistZeroIndices]
-    """
+    # get the data for generating the abnormal nodes
+    mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
+    mnistOnes = loadedFeats[mnistOneIndices]
+    mnistZeros = loadedFeats[mnistZeroIndices]
+    
+    # Generate the simulated patients
+    N = 20  # number of patients - should be 7292
+    totalNodes = 500  # total number of nodes for each patient - should be 500
+    patients = [None]*N
+    y = [ 0 for i in xrange(N)]
+    # generate list of permuted indices
+    permutations = [np.random.permutation(len(loadedFeats))]*100
+    permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
+    print "Generating simulated patients..."
+    idx = 0
+    for i in xrange(N):
+        # generate y
+        y[i] = np.random.randint(0, totalNodes)
+        # select subset of indices from list
+        subset = permutations[idx:idx+totalNodes-y[i]]
+        # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
+        normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        if y[i] > 0.0: 
+            abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
+            # add the generated nodes to the list for that patient
+            patients[i] = np.concatenate((abnormalNodes, normalNodes))
+        else: 
+            patients[i] = normalNodes
+        # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
+        # increment index counter
+        idx += totalNodes-y[i]
+        # Woo sanity check
+        print "Iteration " + str(i)
+        print "     Updated index: " + str(idx)
+        print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+        print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
+        print "      Len(results): " + str(len(patients[i]))
 
-    # # Generate the simulated patients
-    # N = 20  # number of patients - should be 7292
-    # totalNodes = 500  # total number of nodes for each patient - should be 500
-    # patients = [[] for i in xrange(N)]
-    # y = [ 0 for i in xrange(N)]
-    # print "Generating simulated patients..."
-    # for i in xrange(N):
-    #     # generate y
-    #     y[i] = np.random.randint(0, totalNodes)
-    #     # generate the nodes
-    #     patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
-
-    # print "Patients have been simulated!"
+    print "Patients have been simulated!"
 
     # # Compute the pairwise similarity between patients using Dougal code
     # print "Calculating similarities..."
@@ -660,46 +676,53 @@ elif args.runtype == 1:
     # print "Sparse graph loaded!"
 
 elif args.runtype == 2:
-    # generate all subjects
-    # load the data, shuffled and split between train and test sets
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    X_train = X_train.reshape(60000, 784)
-    X_test = X_test.reshape(10000, 784)
-    A = np.vstack((X_test, X_train[0:25000]))
-    A_y = np.hstack((y_test, y_train[0:25000]))
-    B = X_train[25000:]
-    B_y = y_train[25000:]
-    X_train = B.astype('float32')
-    X_test = A.astype('float32')
-    X_train /= 255
-    X_test /= 255
-    y_train = B_y
-    y_test = A_y
+    # Load a previously trained keras model
+    kerasFN = "simulatedData/keras-model"
+    model = load_model(kerasFN)
 
-    # Train the model
-    print "Training the knn model..."
-    K._LEARNING_PHASE = tf.constant(0)
-    model = trainModel(X_train, y_train, X_test, y_test)
-    print "KNN model trained!"
+    # Load the features for the test data set - done! 
+    featsFN = "simulatedData/node-features"
+    # Load the feature and their classes
+    loadedFeats, loadedY = loadFeatures(featsFN)
 
     # get the data for generating the abnormal nodes
-    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
-    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
-    mnistOnes = X_test[mnistOneIndices]
-    mnistZeros = X_test[mnistZeroIndices]
-
-    totalNodes = 500
-    N = 7292
-    N = 20
-    # generate the subjects
-    patients = [[] for i in xrange(N)]
+    mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
+    mnistOnes = loadedFeats[mnistOneIndices]
+    mnistZeros = loadedFeats[mnistZeroIndices]
+    
+    # Generate the simulated patients
+    N = 7292  # number of patients - should be 7292
+    totalNodes = 500  # total number of nodes for each patient - should be 500
+    patients = [None]*N
     y = [ 0 for i in xrange(N)]
+    # generate list of permuted indices
+    permutations = [np.random.permutation(len(loadedFeats))]*100
+    permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
+    idx = 0
     for i in xrange(N):
         # generate y
         y[i] = np.random.randint(0, totalNodes)
-        # generate the nodes
-        patients[i] = simulateSinglePatient(y[i], totalNodes, X_test, mnistOnes, mnistZeros, model)
+        # select subset of indices from list
+        subset = permutations[idx:idx+totalNodes-y[i]]
+        # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
+        normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        if y[i] > 0.0: 
+            abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
+            # add the generated nodes to the list for that patient
+            patients[i] = np.concatenate((abnormalNodes, normalNodes))
+        else: 
+            patients[i] = normalNodes
+        # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
+        # increment index counter
+        idx += totalNodes-y[i]
+        # # Woo sanity check
+        # print "Iteration " + str(i)
+        # print "     Updated index: " + str(idx)
+        # print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+        # print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
+        # print "      Len(results): " + str(len(patients[i]))
 
     print "Patients have been simulated!"
 
