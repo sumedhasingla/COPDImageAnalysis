@@ -1,0 +1,9 @@
+# get the interactive node
+srun -p LM --pty --time=72:00:00 --share --mem 10000G /bin/bash
+
+# after getting node, forward ipython notebook
+cd /home/jms565/code/
+ipython notebook --no-browser --port=8001  --ip="*"
+
+# on my computer (not bridges), set up a tunnel
+ssh -N -f -L localhost:8001:<IP of NODE>:8001 jms565@bridges.psc.xsede.org

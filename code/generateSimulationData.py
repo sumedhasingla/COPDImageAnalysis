@@ -548,6 +548,7 @@ runTypeHelp += "    - 0: generate metadata"
 runTypeHelp += "    - 1: test the functions to see if they run"
 runTypeHelp += "    - 2: generate all 7292 simulated patients"
 runTypeHelp += "    - 3: generate, save, build graph for, and sparsify graph for single subject"
+runTypeHelp += "    - 4: generate kernel (similarities)"
 parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=1)
 
 args = parser.parse_args()
@@ -562,19 +563,19 @@ if args.runtype == 0:
 elif args.runtype == 1:
     # Load MNIST data
     # the data, shuffled and split between train and test sets
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    X_train = X_train.reshape(60000, 784)
-    X_test = X_test.reshape(10000, 784)
-    A = np.vstack((X_test, X_train[0:25000]))
-    A_y = np.hstack((y_test, y_train[0:25000]))
-    B = X_train[25000:]
-    B_y = y_train[25000:]
-    X_train = B.astype('float32')
-    X_test = A.astype('float32')
-    X_train /= 255
-    X_test /= 255
-    y_train = B_y
-    y_test = A_y
+    # (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    # X_train = X_train.reshape(60000, 784)
+    # X_test = X_test.reshape(10000, 784)
+    # A = np.vstack((X_test, X_train[0:25000]))
+    # A_y = np.hstack((y_test, y_train[0:25000]))
+    # B = X_train[25000:]
+    # B_y = y_train[25000:]
+    # X_train = B.astype('float32')
+    # X_test = A.astype('float32')
+    # X_train /= 255
+    # X_test /= 255
+    # y_train = B_y
+    # y_test = A_y
 
     # # Train the model
     # print "Training the knn model..."
@@ -589,16 +590,16 @@ elif args.runtype == 1:
     # # Generate the features for the test data set
     # feats = extractFeatures(X_test, model)
     # # Save the features and their classes 
-    featsFN = "simulatedData/node-features"
+    # featsFN = "simulatedData/node-features"
     # saveFeatures(featsFN, feats, y_test) # how to get y in here?
     # # Load the feature and their classes
-    loadedFeats, loadedY = loadFeatures(featsFN)
+    # loadedFeats, loadedY = loadFeatures(featsFN)
 
     # get the data for generating the abnormal nodes
-    mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
-    mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
-    mnistOnes = loadedFeats[mnistOneIndices]
-    mnistZeros = loadedFeats[mnistZeroIndices]
+    # mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
+    # mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
+    # mnistOnes = loadedFeats[mnistOneIndices]
+    # mnistZeros = loadedFeats[mnistZeroIndices]
     
     # # Generate the simulated patients
     # N = 7292  # number of patients - should be 7292
@@ -639,32 +640,32 @@ elif args.runtype == 1:
     patientsFN = "./simulatedData/simulatedSubjects"
     # saveSimSubject(patientsFN, patients, y)
     loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
-    print "Patients have been loaded and are good to go: " + str(loadedSubjs==patients)
+    # print "Patients have been loaded and are good to go: " + str(loadedSubjs==patients)
 
     # Compute the pairwise similarity between patients using Dougal code
     print "Calculating similarities..."
-    sims = computePairwiseSimilarities(patients, y)
+    sims = computePairwiseSimilarities(loadedSubjs[0:1000], numAbnormalNodes[0:1000])
     print "Similarities calculated!"
 
-    # Build the nearest neighbor graph for the patient
-    print "About to build a nearest neighbor graph for patient 0..."
-    graph = buildSubjectGraph(0, patients)
-    print "KNN graph built!"
+    # # Build the nearest neighbor graph for the patient
+    # print "About to build a nearest neighbor graph for patient 0..."
+    # graph = buildSubjectGraph(0, patients)
+    # print "KNN graph built!"
 
-    # Sparsify the nearest neighbor graph for the patient
-    print "Sparsifying the graph for patient 0..."
-    mdFN = "metadata-simulated"
-    metadata = loadSimMetadata(mdFN)
-    sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
-    print "Sparse graph generated!"
+    # # Sparsify the nearest neighbor graph for the patient
+    # print "Sparsifying the graph for patient 0..."
+    # mdFN = "metadata-simulated"
+    # metadata = loadSimMetadata(mdFN)
+    # sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
+    # print "Sparse graph generated!"
 
-    # Saving the sparse graph
-    print "Saving the sparse graph for patient 0..."
-    sparseFN = "simulatedData/sparseGraphs/0000"
-    saveSparseGraph(sparseGraph, sparseFN)
-    print "Sparse graph saved!"
-    loadedSparseGraph = loadSparseGraph(sparseFN)
-    print "Sparse graph loaded!"
+    # # Saving the sparse graph
+    # print "Saving the sparse graph for patient 0..."
+    # sparseFN = "simulatedData/sparseGraphs/0000"
+    # saveSparseGraph(sparseGraph, sparseFN)
+    # print "Sparse graph saved!"
+    # loadedSparseGraph = loadSparseGraph(sparseFN)
+    # print "Sparse graph loaded!"
 
 elif args.runtype == 2:
     # Load a previously trained keras model
@@ -737,10 +738,31 @@ elif args.runtype == 3:
     # mdFN = "simulatedData/metadata-simulated"
     mdFN = "/pylon1/ms4s88p/jms565/simulatedData/metadata-simulated"
     md = loadSimMetadata(mdFN)
-    sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph[args.subject], numSimNodes=3) for i in xrange(1))
+    sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph[0], numSimNodes=3) for i in xrange(1))
     print "Finished sparsifying the graph!"
     # save the sparse graph for the subject
     # sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
-    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs' + str(args.subject).zfill(4)
-    saveSparseGraph(sparseGraph, sparseFN)
-    print "Sparse graph for subect " + str(args.subject) + "!"
+    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs/' + str(args.subject).zfill(4)
+    saveSparseGraph(sparseGraph[0], sparseFN)
+    print "Sparse graph for subject " + str(args.subject) + "!"
+    loaded = loadSparseGraph(sparseFN)
+    print "Checking sparse graph:"
+    print "  Same data: " + str((loaded.data==sparseGraph[0].data).all())
+    print "  Same indices: " + str((loaded.indices==sparseGraph[0].indices).all())
+    print "  Same indptrs: " + str((loaded.indptr==sparseGraph[0].indptr).all())
+    print "  Same shapes: " + str(loaded.shape==sparseGraph[0].shape)
+
+elif args.runtype == 4:
+    # generate kernel
+    # load the patient node information
+    patientsFN = "./simulatedData/simulatedSubjects"
+    loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
+    print "Similarities calculated!"
+    # Save the similarities
+    kernelFN = "./simulatedData/kernel-matrix"
+    saveSimilarities(kernelFN, sims)
+    # Load the similarities to test
+    loadedKernel = loadSimilarities(kernelFN)

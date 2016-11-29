@@ -1,4 +1,4 @@
-#!/home/jms565/anaconda2/bin/python
+#!/usr/bin/env python
 import sys
 import os
 import numpy as np
@@ -60,10 +60,10 @@ def loadPickledData():
     # pickleFn =  '%(pickleRootFolder)s/%(pickleSettingName)s/%(pickleSettingName)s.data.p'%\
 
     # On Bridges for job
-    pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
+    # pickleFn =  '/pylon1/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
 
     # desktop or laptop or home
-    # pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
+    pickleFn = "/home/jenna/Research/lung-image-analysis/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
     print "pickleFn : ", pickleFn
     
     # reading pickle and shelve files
@@ -198,7 +198,8 @@ print "About to start building the graphs in parallel..."
 subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data, args.neighbors) for i in xrange(1))
 print "Finished buliding the graphs!"
 # fn = "test_results/"+str(args.subject).zfill(4)
-fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
+# fn = "/pylon1/ms4s88p/jms565/test_results/"+str(args.subject).zfill(4)
+fn = "denseSubj_"+str(args.subject).zfill(4)
 saveSubjectGraph(subjGraph[0], fn)
 # data2 = loadSubjectGraph(fn)
 
