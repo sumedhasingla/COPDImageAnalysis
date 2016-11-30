@@ -333,7 +333,7 @@ def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
 # Saving and Loading Files
 #--------------------------------------------------------------------------
 
-def saveSimSubject(fn, patient, y):
+def saveSimSubjects(fn, patient, y):
     """
     Function to save the generated patient features/nodes using pickle
 
@@ -352,7 +352,7 @@ def saveSimSubject(fn, patient, y):
     f.close()
     print "Saved the data for the simulated patients using pickle."
 
-def loadSimSubject(fn):
+def loadSimSubjects(fn):
     """
     Load a previously saved simulated subject from a .npz file.
 
