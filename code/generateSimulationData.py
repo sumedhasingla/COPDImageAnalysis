@@ -299,28 +299,29 @@ def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
 # Saving and Loading Files
 #--------------------------------------------------------------------------
 
-def saveSimSubjects(fn, features, images, ids, y):
+def saveSimFeats(fn, features, ids, y):
     """
-    Function to save the generated patient features/nodes using pickle
+    Function to save the generated patient features using pickle
 
     Inputs:
     - fn: filename/directory to save to (extensionless)
-    - patient: single patient's features/nodes
+    - features: single patient's features/nodes
+    - ids: subject ids
+    - y: the label (number of abnormal nodes)
 
     Returns: nothing
     """
     cucumber = {
         "ids": ids,
         "y": y,
-        "features": features,
-        "images": images
+        "features": features
     }
-    with open(fn+".data.p", "wb") as f:
+    with open(fn+"-feats.data.p", "wb") as f:
         pk.dump(cucumber, f)
     f.close()
-    print "Saved ALL data for the simulated patients using pickle."
+    print "Saved features data for the simulated patients using pickle."
 
-def loadSimSubjects(fn):
+def loadSimFeats(fn):
     """
     Load a previously saved simulated subject from a .npz file.
 
@@ -328,14 +329,42 @@ def loadSimSubjects(fn):
     - fn: filename/directory to load from (extensionless)
 
     Returns:
-    - patients: loaded node/feature information
-    - classes: number of abnormal nodes in the patient
+    - features: single patient's features/nodes
+    - ids: subject ids
+    - y: the label (number of abnormal nodes)
     """
-    with open(fn+".data.p", "rb") as f:
+    with open(fn+"-feats.data.p", "rb") as f:
         loader = pk.load(f)
     f.close()
     print "Simluated patient features and metadata loaded!"
-    return loader['ids'], np.asarray(loader['y']), loader['features'], loader['images']
+    return loader['ids'], np.asarray(loader['y']), loader['features']
+
+def saveSimImg(fn, img):
+    """
+    Function to save the generated patient imgs using pickle
+
+    Inputs:
+    - fn: filename/directory to save to (extensionless)
+    - img: single patient's image collection
+
+    Returns: nothing
+    """
+    np.savez(fn, image=img)
+    # print "Saved another patient image."
+
+def loadSimImg(fn):
+    """
+    Load a previously saved simulated subject from a .npz file.
+
+    Inputs:
+    - fn: filename/directory to load from (extensionless)
+
+    Returns:
+    - images: single patient's features/nodes
+    """
+    loader = np.load(fn+".npz")
+    print "Image " + fn + " loaded!"
+    return loader['image']
 
 def saveSimilarities(fn, sims):
     """
@@ -591,10 +620,10 @@ elif args.runtype == 1:
     N = 7000  # number of patients - should be 7000
     totalNodes = 500  # total number of nodes for each patient - should be 500
     patFeats = [None]*N
-    patImgs = [None]*N
     ids = [None]*N
     mu = 250
     sigma = 50
+    img0 = None
     y = np.floor(np.random.normal(mu, sigma, N)).astype(int)
     # generate list of permuted indices
     permutations = [np.random.permutation(len(loadedFeats))]*100
@@ -604,6 +633,7 @@ elif args.runtype == 1:
     for i in xrange(N):
         # update the metadata for the patient
         ids[i] = "S"+str(i).zfill(4)
+        patImgs = []
         # select subset of indices from list
         subset = permutations[idx:idx+totalNodes-y[i]]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
@@ -616,7 +646,7 @@ elif args.runtype == 1:
             # add the generated features to the list for that patient
             patFeats[i] = np.concatenate((abnormalFeats, normalFeats))
             # add the generated images to the list for that patient
-            patImgs[i] = np.concatenate((normalImgs, abnormalImgs))
+            patImgs = np.concatenate((normalImgs, abnormalImgs))
             # Woo sanity check
             # print "Iteration " + str(i)
             # print "     Updated index: " + str(idx)
@@ -627,7 +657,7 @@ elif args.runtype == 1:
             # print "     Len(patFeats): " + str(len(patFeats[i]))
         else: 
             patFeats[i] = normalFeats
-            patImgs[i] = normalImgs
+            patImgs = normalImgs
             # Woo sanity check
             # print "Iteration " + str(i)
             # print "     Updated index: " + str(idx)
@@ -635,18 +665,28 @@ elif args.runtype == 1:
             # print "   Len(normalImgs): " + str(len(normalImgs))
             # print "     Len(patFeats): " + str(len(patFeats[i]))
 
+        if i == 0:
+            img0 = patImgs
+
         # increment index counter
         idx += totalNodes-y[i]
+        imgFN = "./simulatedData/simulatedImages/" + ids[i]
+        saveSimImg(imgFN, patImgs)
 
     print "Patients have been simulated!"
 
     # Save the patients
     patientsFN = "./simulatedData/simulatedSubjects"
-    saveSimSubjects(patientsFN, patFeats, patImgs, ids, y)
-    loadedIds, loadedYs, loadedPatches, loadedImgs = loadSimSubjects(patientsFN)
+    saveSimFeats(patientsFN, patFeats, ids, y)
+
+    imgFN = "./simulatedData/simulatedImages/S0000"
+    loadedImg = loadSimImg(imgFN)
+    print "Patients have been loaded: " 
+    print "      Images: " + str((loadedImg==img0).all())
+
+    loadedIds, loadedYs, loadedPatches = loadSimFeats(patientsFN)
     print "Patients have been loaded: " 
     print "    Features: " + str((np.asarray(loadedPatches)==np.asarray(patFeats)).all())
-    print "      Images: " + str((np.asarray(loadedImgs)==np.asarray(patImgs)).all())
     print "         Ids: " + str((np.asarray(loadedIds)==np.asarray(ids)).all())
     print "           Y: " + str((loadedYs==y).all())
 
