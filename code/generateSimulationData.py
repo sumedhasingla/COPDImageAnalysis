@@ -126,7 +126,6 @@ def generateAbnormalNode(feats, imgs):
     abImg = i0+i1
     return [abFeat, abImg]
 
-
 def extractFeatures(X, model):
     """
     Extract the features of X using the activation layer of the model
@@ -167,7 +166,7 @@ def computePairwiseSimilarities(patients, y):
     #          not sure what the pairwise picker line does?
     #          rbf and projectPSD help ensure the data is separable?
     distEstModel = Pipeline([
-        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3])),
+        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3], version='best')),
         ('pick', PairwisePicker((0, 0))),
         ('symmetrize', Symmetrize()),
         ('rbf', RBFize(gamma=1, scale_by_median=True)),
@@ -546,7 +545,7 @@ runTypeHelp += "    - 1: test the functions to see if they run"
 runTypeHelp += "    - 2: generate all 7292 simulated patients"
 runTypeHelp += "    - 3: generate, save, build graph for, and sparsify graph for single subject"
 runTypeHelp += "    - 4: generate kernel (similarities)"
-parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=1)
+parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=2)
 
 args = parser.parse_args()
 
@@ -693,15 +692,19 @@ elif args.runtype == 1:
 elif args.runtype == 2:
     # save the subject
     patientsFN = "./simulatedData/simulatedSubjects"
-    loadedSubjs = loadSimSubject(patientsFN)
+    loadedIds, numAbnormalNodes, loadedSubjs = loadSimFeats(patientsFN)
 
     # Compute the pairwise similarity between patients using Dougal code
     print "Calculating similarities..."
     sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
     print "Similarities calculated!"
     # save the similarities
+    kernelFN = "./simulatedData/kernel"
+    saveSimilarities(kernelFN, sims)
     # load the similarities to check
+    loadedK = loadSimilarities(kernelFN)
     # check the similarities
+    print (loadedK==sims).all()
 
 elif args.runtype == 3:
     # parallelized part
