@@ -100,7 +100,7 @@ def trainModel(X_train, y_train, X_test, y_test):
     # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
-def generateAbnormalNode(mnistOnes, mnistZeros):
+def generateAbnormalNode(feats, imgs):
     """
     Choose 2 images from the MNIST dataset to combine into an "abnormal" node
 
@@ -112,54 +112,20 @@ def generateAbnormalNode(mnistOnes, mnistZeros):
     - abnormal: the abnormal node 
     """
     # generate a random number to select a 1 image
-    idx1 = np.random.randint(0, len(mnistOnes)-1)
+    idx1 = np.random.randint(0, len(feats[0])-1)
     # generate a random number to select a 0 image
-    idx0 = np.random.randint(0, len(mnistZeros)-1)
+    idx0 = np.random.randint(0, len(feats[0])-1)
     # select a 1 image
-    v1 = mnistOnes[idx1]
+    v1 = feats[1][idx1]
+    i1 = imgs[1][idx1]
     # select a 0 image
-    v0 = mnistZeros[idx0]
+    v0 = feats[0][idx0]
+    i0 = imgs[1][idx0]
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
-    abnormal = v1+v0
-    return abnormal
+    abFeat = v1+v0
+    abImg = i0+i1
+    return [abFeat, abImg]
 
-def simulateSinglePatient(y, feats, mnistOnes, mnistZeros, totalNodes=500):
-    """
-    Generate the abnormal and normal nodes for a single patient
-
-    Inputs:
-    - y: the number of abnormal nodes to generate
-    - feats: subset of previously extracted features of the X_test dataset
-    - mnistOnes, mnistZeros: features for digits 1 and 0
-    - totalNodes: the total number of nodes to generate
-
-    Returns:
-    - nodes: list of normal and abnormal nodes
-    """
-    nodes = [[] for i in xrange(totalNodes)]
-    # create y abnormal nodes
-    for i in xrange(y):
-        # generate a single abnormal node
-        abnormal = generateAbnormalNode(mnistOnes, mnistZeros)
-        # extract the feature
-        # add the feature for that node to the list
-        nodes[i] = feats
-
-    # create totalNodes-y normal nodes
-    for i in xrange(y, totalNodes):
-        # generate the random number
-        num = np.random.randint(0, len(digits)-1)
-        # add small amount of noise to the data sample - this is Gaussian not salt and pepper
-        patch0 = digits[num].reshape((1, 784))
-        patch = patch0 + np.random.rand(1, 784)*patch0.max()/12.0
-        idx = patch > patch0.max()
-        patch[idx] = patch0.max()
-        # extract the feature
-        feats = extractFeatures(patch, model)
-        # add the feature for that node to the list
-        nodes[i] = feats
-
-    return np.vstack(nodes)
 
 def extractFeatures(X, model):
     """
@@ -333,7 +299,7 @@ def buildBlock(graphIJ, i, j, superMD, numSimNodes=3):
 # Saving and Loading Files
 #--------------------------------------------------------------------------
 
-def saveSimSubjects(fn, patient, y):
+def saveSimSubjects(fn, features, images, ids, y):
     """
     Function to save the generated patient features/nodes using pickle
 
@@ -344,13 +310,15 @@ def saveSimSubjects(fn, patient, y):
     Returns: nothing
     """
     cucumber = {
-        "patients": patient,
-        "classes": y
+        "ids": ids,
+        "y": y,
+        "features": features,
+        "images": images
     }
     with open(fn+".data.p", "wb") as f:
         pk.dump(cucumber, f)
     f.close()
-    print "Saved the data for the simulated patients using pickle."
+    print "Saved ALL data for the simulated patients using pickle."
 
 def loadSimSubjects(fn):
     """
@@ -366,8 +334,8 @@ def loadSimSubjects(fn):
     with open(fn+".data.p", "rb") as f:
         loader = pk.load(f)
     f.close()
-    print "Simluated patient data loaded!"
-    return loader['patients'], loader['classes']
+    print "Simluated patient features and metadata loaded!"
+    return loader['ids'], np.asarray(loader['y']), loader['features'], loader['images']
 
 def saveSimilarities(fn, sims):
     """
@@ -554,28 +522,28 @@ parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=1)
 args = parser.parse_args()
 
 if args.runtype == 0: 
+    # preprocessing
     N = 7292  # number of patients - should be 7292
     totalNodes = 500  # total number of nodes for each patient - should be 500
     mdFN = "metadata-simulated"
     saveSimMetadata(mdFN, N, totalNodes)
     loadSimMetadata(mdFN)
 
-elif args.runtype == 1:
     # Load MNIST data
     # the data, shuffled and split between train and test sets
-    # (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    # X_train = X_train.reshape(60000, 784)
-    # X_test = X_test.reshape(10000, 784)
-    # A = np.vstack((X_test, X_train[0:25000]))
-    # A_y = np.hstack((y_test, y_train[0:25000]))
-    # B = X_train[25000:]
-    # B_y = y_train[25000:]
-    # X_train = B.astype('float32')
-    # X_test = A.astype('float32')
-    # X_train /= 255
-    # X_test /= 255
-    # y_train = B_y
-    # y_test = A_y
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    X_train = X_train.reshape(60000, 784)
+    X_test = X_test.reshape(10000, 784)
+    A = np.vstack((X_test, X_train[0:25000]))
+    A_y = np.hstack((y_test, y_train[0:25000]))
+    B = X_train[25000:]
+    B_y = y_train[25000:]
+    X_train = B.astype('float32')
+    X_test = A.astype('float32')
+    X_train /= 255
+    X_test /= 255
+    y_train = B_y
+    y_test = A_y
 
     # # Train the model
     # print "Training the knn model..."
@@ -590,135 +558,110 @@ elif args.runtype == 1:
     # # Generate the features for the test data set
     # feats = extractFeatures(X_test, model)
     # # Save the features and their classes 
-    # featsFN = "simulatedData/node-features"
-    # saveFeatures(featsFN, feats, y_test) # how to get y in here?
-    # # Load the feature and their classes
-    # loadedFeats, loadedY = loadFeatures(featsFN)
-
-    # get the data for generating the abnormal nodes
-    # mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
-    # mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
-    # mnistOnes = loadedFeats[mnistOneIndices]
-    # mnistZeros = loadedFeats[mnistZeroIndices]
-    
-    # # Generate the simulated patients
-    # N = 7292  # number of patients - should be 7292
-    # totalNodes = 500  # total number of nodes for each patient - should be 500
-    # patients = [None]*N
-    # y = [ 0 for i in xrange(N)]
-    # # generate list of permuted indices
-    # permutations = [np.random.permutation(len(loadedFeats))]*100
-    # permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
-    # print "Generating simulated patients..."
-    # idx = 0
-    # for i in xrange(N):
-    #     # generate y
-    #     y[i] = np.random.randint(0, totalNodes)
-    #     # select subset of indices from list
-    #     subset = permutations[idx:idx+totalNodes-y[i]]
-    #     # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-    #     normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
-    #     if y[i] > 0.0: 
-    #         abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
-    #         # add the generated nodes to the list for that patient
-    #         patients[i] = np.concatenate((abnormalNodes, normalNodes))
-    #     else: 
-    #         patients[i] = normalNodes
-    #     # patients[i] = simulateSinglePatient(y[i], loadedFeats[subset], mnistOnes, mnistZeros)
-    #     # increment index counter
-    #     idx += totalNodes-y[i]
-    #     # Woo sanity check
-    #     print "Iteration " + str(i)
-    #     print "     Updated index: " + str(idx)
-    #     print "  Len(normalNodes): " + str(len(normalNodes)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
-    #     print "Len(abnormalNodes): " + str(len(abnormalNodes)) + " y[i]: " + str(y[i])
-    #     print "      Len(results): " + str(len(patients[i]))
-
-    # print "Patients have been simulated!"
-
-    # Save the patients
-    patientsFN = "./simulatedData/simulatedSubjects"
-    # saveSimSubject(patientsFN, patients, y)
-    loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
-    # print "Patients have been loaded and are good to go: " + str(loadedSubjs==patients)
-
-    # Compute the pairwise similarity between patients using Dougal code
-    print "Calculating similarities..."
-    sims = computePairwiseSimilarities(loadedSubjs[0:1000], numAbnormalNodes[0:1000])
-    print "Similarities calculated!"
-
-    # # Build the nearest neighbor graph for the patient
-    # print "About to build a nearest neighbor graph for patient 0..."
-    # graph = buildSubjectGraph(0, patients)
-    # print "KNN graph built!"
-
-    # # Sparsify the nearest neighbor graph for the patient
-    # print "Sparsifying the graph for patient 0..."
-    # mdFN = "metadata-simulated"
-    # metadata = loadSimMetadata(mdFN)
-    # sparseGraph = compileGraphSingleSubj(metadata, 0, graph)
-    # print "Sparse graph generated!"
-
-    # # Saving the sparse graph
-    # print "Saving the sparse graph for patient 0..."
-    # sparseFN = "simulatedData/sparseGraphs/0000"
-    # saveSparseGraph(sparseGraph, sparseFN)
-    # print "Sparse graph saved!"
-    # loadedSparseGraph = loadSparseGraph(sparseFN)
-    # print "Sparse graph loaded!"
-
-elif args.runtype == 2:
-    # Load a previously trained keras model
-    kerasFN = "simulatedData/keras-model"
-    model = load_model(kerasFN)
-
-    # Load the features for the test data set - done! 
     featsFN = "simulatedData/node-features"
-    # Load the feature and their classes
+    # saveFeatures(featsFN, feats, y_test) 
+    # # Load the feature and their classes
+    loadedFeats, loadedY = loadFeatures(featsFN)
+
+elif args.runtype == 1:
+    # Load MNIST data
+    # the data, shuffled and split between train and test sets
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    X_train = X_train.reshape(60000, 784)
+    X_test = X_test.reshape(10000, 784)
+    A = np.vstack((X_test, X_train[0:25000]))
+    A_y = np.hstack((y_test, y_train[0:25000]))
+    X_test = A.astype('float32')
+    X_test /= 255
+    y_test = A_y
+
+    # Generate the features for the test data set 
+    featsFN = "simulatedData/node-features"
     loadedFeats, loadedY = loadFeatures(featsFN)
 
     # get the data for generating the abnormal nodes
     mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
     mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
-    mnistOnes = loadedFeats[mnistOneIndices]
-    mnistZeros = loadedFeats[mnistZeroIndices]
+    onesFeats = loadedFeats[mnistOneIndices]
+    zerosFeats = loadedFeats[mnistZeroIndices]
+    onesImgs = X_test[mnistOneIndices]
+    zerosImgs = X_test[mnistZeroIndices]
     
     # Generate the simulated patients
-    N = 7292  # number of patients - should be 7292
+    N = 7000  # number of patients - should be 7000
     totalNodes = 500  # total number of nodes for each patient - should be 500
-    patients = [None]*N
-    y = [ 0 for i in xrange(N)]
+    patFeats = [None]*N
+    patImgs = [None]*N
+    ids = [None]*N
+    mu = 250
+    sigma = 50
+    y = np.floor(np.random.normal(mu, sigma, N)).astype(int)
     # generate list of permuted indices
     permutations = [np.random.permutation(len(loadedFeats))]*100
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
     idx = 0
     for i in xrange(N):
-        # generate y
-        y[i] = np.random.randint(0, totalNodes)
+        # update the metadata for the patient
+        ids[i] = "S"+str(i).zfill(4)
         # select subset of indices from list
         subset = permutations[idx:idx+totalNodes-y[i]]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-        normalNodes = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        normalImgs = X_test[subset]
         if y[i] > 0.0: 
-            abnormalNodes = np.asarray([generateAbnormalNode(mnistOnes, mnistZeros) for j in xrange(y[i])])
-            # add the generated nodes to the list for that patient
-            patients[i] = np.concatenate((abnormalNodes, normalNodes))
+            abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(y[i])]
+            abnormalFeats = [row[0] for row in abnormals]
+            abnormalImgs = [row[1] for row in abnormals]
+            # add the generated features to the list for that patient
+            patFeats[i] = np.concatenate((abnormalFeats, normalFeats))
+            # add the generated images to the list for that patient
+            patImgs[i] = np.concatenate((normalImgs, abnormalImgs))
+            # Woo sanity check
+            # print "Iteration " + str(i)
+            # print "     Updated index: " + str(idx)
+            # print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            # print "   Len(normalImgs): " + str(len(normalImgs))
+            # print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " y[i]: " + str(y[i])
+            # print " Len(abnormalImgs): " + str(len(abnormalImgs))
+            # print "     Len(patFeats): " + str(len(patFeats[i]))
         else: 
-            patients[i] = normalNodes
+            patFeats[i] = normalFeats
+            patImgs[i] = normalImgs
+            # Woo sanity check
+            # print "Iteration " + str(i)
+            # print "     Updated index: " + str(idx)
+            # print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            # print "   Len(normalImgs): " + str(len(normalImgs))
+            # print "     Len(patFeats): " + str(len(patFeats[i]))
+
         # increment index counter
         idx += totalNodes-y[i]
 
     print "Patients have been simulated!"
 
-    # save the subject
-    # FIGURE OUT WHERE TO SAVE THE SUBJECTS
+    # Save the patients
     patientsFN = "./simulatedData/simulatedSubjects"
-    # patientsFN = '/pylon1/ms4s88p/jms565/simulatedSubjects'
-    # for i in xrange(N):
-    # saveSimSubject(patientsFN, patients, y)
+    saveSimSubjects(patientsFN, patFeats, patImgs, ids, y)
+    loadedIds, loadedYs, loadedPatches, loadedImgs = loadSimSubjects(patientsFN)
+    print "Patients have been loaded: " 
+    print "    Features: " + str((np.asarray(loadedPatches)==np.asarray(patFeats)).all())
+    print "      Images: " + str((np.asarray(loadedImgs)==np.asarray(patImgs)).all())
+    print "         Ids: " + str((np.asarray(loadedIds)==np.asarray(ids)).all())
+    print "           Y: " + str((loadedYs==y).all())
+
+elif args.runtype == 2:
+    # save the subject
+    patientsFN = "./simulatedData/simulatedSubjects"
     loadedSubjs = loadSimSubject(patientsFN)
-    # chose to save all in one file because that's how the build subject code works (plus one less for loop)
+
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
+    print "Similarities calculated!"
+    # save the similarities
+    # load the similarities to check
+    # check the similarities
 
 elif args.runtype == 3:
     # parallelized part
