@@ -166,11 +166,11 @@ def computePairwiseSimilarities(patients, y):
     #          not sure what the pairwise picker line does?
     #          rbf and projectPSD help ensure the data is separable?
     distEstModel = Pipeline([
-        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3], version='best')),
-        ('pick', PairwisePicker((0, 0))),
-        ('symmetrize', Symmetrize()),
-        ('rbf', RBFize(gamma=1, scale_by_median=True)),
-        ('project', ProjectPSD())
+        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3])),
+        ('pick', PairwisePicker((0, 0)))#,
+        # ('symmetrize', Symmetrize()),
+        # ('rbf', RBFize(gamma=1, scale_by_median=True)),
+        # ('project', ProjectPSD())
     ])
 
     # return the pairwise similarities between the bags (patients)
@@ -696,10 +696,10 @@ elif args.runtype == 2:
 
     # Compute the pairwise similarity between patients using Dougal code
     print "Calculating similarities..."
-    sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
+    sims = computePairwiseSimilarities(loadedSubjs[:2000], numAbnormalNodes[:2000])
     print "Similarities calculated!"
     # save the similarities
-    kernelFN = "./simulatedData/kernel"
+    kernelFN = "./simulatedData/divergence-2000"
     saveSimilarities(kernelFN, sims)
     # load the similarities to check
     loadedK = loadSimilarities(kernelFN)
