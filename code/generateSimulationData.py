@@ -166,9 +166,9 @@ def computePairwiseSimilarities(patients, y):
     #          not sure what the pairwise picker line does?
     #          rbf and projectPSD help ensure the data is separable?
     distEstModel = Pipeline([
-        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3])),
-        ('pick', PairwisePicker((0, 0)))#,
-        # ('symmetrize', Symmetrize()),
+        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3], n_jobs=-1, version='fast')),
+        ('pick', PairwisePicker((0, 0))),
+        ('symmetrize', Symmetrize())#,
         # ('rbf', RBFize(gamma=1, scale_by_median=True)),
         # ('project', ProjectPSD())
     ])
@@ -616,30 +616,34 @@ elif args.runtype == 1:
     zerosImgs = X_test[mnistZeroIndices]
     
     # Generate the simulated patients
-    N = 7000  # number of patients - should be 7000
+    N = 2000  # number of patients - should be 7000
     totalNodes = 500  # total number of nodes for each patient - should be 500
     patFeats = [None]*N
     ids = [None]*N
     mu = 250
-    sigma = 50
+    sigma = 200
     img0 = None
-    y = np.floor(np.random.normal(mu, sigma, N)).astype(int)
+    yDist = np.random.normal(mu, sigma, N*5)
+    yClipped = yDist[((yDist >= 0) & (yDist < 500))]
+    y = yClipped[:N]
     # generate list of permuted indices
     permutations = [np.random.permutation(len(loadedFeats))]*100
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
     idx = 0
     for i in xrange(N):
+        # get a rounded version of the current y
+        yRound = np.floor(y[i]).astype(int)
         # update the metadata for the patient
         ids[i] = "S"+str(i).zfill(4)
         patImgs = []
         # select subset of indices from list
-        subset = permutations[idx:idx+totalNodes-y[i]]
+        subset = permutations[idx:idx+totalNodes-yRound]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
         normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
         normalImgs = X_test[subset]
-        if y[i] > 0.0: 
-            abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(y[i])]
+        if yRound > 0.0: 
+            abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(yRound)]
             abnormalFeats = [row[0] for row in abnormals]
             abnormalImgs = [row[1] for row in abnormals]
             # add the generated features to the list for that patient
@@ -668,7 +672,7 @@ elif args.runtype == 1:
             img0 = patImgs
 
         # increment index counter
-        idx += totalNodes-y[i]
+        idx += totalNodes-yRound
         imgFN = "./simulatedData/simulatedImages/" + ids[i]
         saveSimImg(imgFN, patImgs)
 
@@ -680,11 +684,11 @@ elif args.runtype == 1:
 
     imgFN = "./simulatedData/simulatedImages/S0000"
     loadedImg = loadSimImg(imgFN)
-    print "Patients have been loaded: " 
+    print "Patient image list has been loaded: " 
     print "      Images: " + str((loadedImg==img0).all())
 
     loadedIds, loadedYs, loadedPatches = loadSimFeats(patientsFN)
-    print "Patients have been loaded: " 
+    print "Patient features have been loaded: " 
     print "    Features: " + str((np.asarray(loadedPatches)==np.asarray(patFeats)).all())
     print "         Ids: " + str((np.asarray(loadedIds)==np.asarray(ids)).all())
     print "           Y: " + str((loadedYs==y).all())
@@ -696,10 +700,10 @@ elif args.runtype == 2:
 
     # Compute the pairwise similarity between patients using Dougal code
     print "Calculating similarities..."
-    sims = computePairwiseSimilarities(loadedSubjs[:2000], numAbnormalNodes[:2000])
+    sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
     print "Similarities calculated!"
     # save the similarities
-    kernelFN = "./simulatedData/divergence-2000"
+    kernelFN = "./simulatedData/kernel-2000-sym-v2"
     saveSimilarities(kernelFN, sims)
     # load the similarities to check
     loadedK = loadSimilarities(kernelFN)
