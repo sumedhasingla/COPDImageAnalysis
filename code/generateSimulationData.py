@@ -28,6 +28,9 @@ from cyflann import *
 import scipy.sparse as sp
 from scipy import *
 
+# for on Bridges
+import os
+
 """
 The purpose of this file is to generate a set of simulated data for the lung 
 image analysis project. The data will come from the MNIST dataset, and abnormal 
@@ -546,7 +549,7 @@ runTypeHelp += "    - 1: test the functions to see if they run"
 runTypeHelp += "    - 2: generate all 7292 simulated patients"
 runTypeHelp += "    - 3: generate, save, build graph for, and sparsify graph for single subject"
 runTypeHelp += "    - 4: generate kernel (similarities)"
-parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=2)
+parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=5)
 
 args = parser.parse_args()
 
@@ -643,7 +646,8 @@ elif args.runtype == 1:
         # select subset of indices from list
         subset = permutations[idx:idx+totalNodes-yRound]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-        normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        # normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
         if yRound > 0.0: 
             abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(yRound)]
@@ -654,22 +658,22 @@ elif args.runtype == 1:
             # add the generated images to the list for that patient
             patImgs = np.concatenate((normalImgs, abnormalImgs))
             # Woo sanity check
-            # print "Iteration " + str(i)
-            # print "     Updated index: " + str(idx)
-            # print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
-            # print "   Len(normalImgs): " + str(len(normalImgs))
-            # print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " y[i]: " + str(y[i])
-            # print " Len(abnormalImgs): " + str(len(abnormalImgs))
-            # print "     Len(patFeats): " + str(len(patFeats[i]))
+            print "Iteration " + str(i)
+            print "     Updated index: " + str(idx)
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            print "   Len(normalImgs): " + str(len(normalImgs))
+            print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " y[i]: " + str(y[i])
+            print " Len(abnormalImgs): " + str(len(abnormalImgs))
+            print "     Len(patFeats): " + str(len(patFeats[i]))
         else: 
             patFeats[i] = normalFeats
             patImgs = normalImgs
             # Woo sanity check
-            # print "Iteration " + str(i)
-            # print "     Updated index: " + str(idx)
-            # print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
-            # print "   Len(normalImgs): " + str(len(normalImgs))
-            # print "     Len(patFeats): " + str(len(patFeats[i]))
+            print "Iteration " + str(i)
+            print "     Updated index: " + str(idx)
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            print "   Len(normalImgs): " + str(len(normalImgs))
+            print "     Len(patFeats): " + str(len(patFeats[i]))
 
         if i == 0:
             img0 = patImgs
@@ -719,12 +723,12 @@ elif args.runtype == 3:
     # read in subject graph
     # patientsFN = './simulatedData/simulatedSubjects'
     patientsFN = '/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects'
-    loadedSubjs = loadSimSubject(patientsFN)
-    data = loadedSubjs[0]
-    classes = loadedSubjs[1]
+    loadedIds, loadedYs, loadedSubjs = loadSimFeats(patientsFN)    
+    data = loadedSubjs
     # build the graph for the subject
     print "About to start building the graph in parallel..."
     subjGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(buildSubjectGraph)(args.subject, data) for i in xrange(1))
+    # subjGraph = buildSubjectGraph(args.subject, data)
     print "Finished building the graph!"
     # sparsify the graph for the subject
     print "Now sparsifying the graph..."
@@ -732,10 +736,11 @@ elif args.runtype == 3:
     mdFN = "/pylon1/ms4s88p/jms565/simulatedData/metadata-simulated"
     md = loadSimMetadata(mdFN)
     sparseGraph = Parallel(n_jobs=args.cores, backend='threading')(delayed(compileGraphSingleSubj)(md, args.subject, subjGraph[0], numSimNodes=3) for i in xrange(1))
+    # sparseGraph = compileGraphSingleSubj(md, args.subject, subjGraph[0], numSimNodes=3)
     print "Finished sparsifying the graph!"
     # save the sparse graph for the subject
-    # sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
-    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs/S' + str(args.subject).zfill(4)
+    sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
+    # sparseFN = os.environ['LOCAL'] + '/S' + str(args.subject).zfill(4)
     saveSparseGraph(sparseGraph[0], sparseFN)
     print "Sparse graph for subject " + str(args.subject) + "!"
     loaded = loadSparseGraph(sparseFN)
