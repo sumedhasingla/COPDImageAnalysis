@@ -78,6 +78,7 @@ def trainModel(X_train, y_train, X_test, y_test):
     model.add(Dense(512, input_shape=(784,)))
     model.add(Activation('relu'))
     model.add(Dropout(0.2))
+    model.add(Dense(20))
     model.add(Activation('relu'))
     model.add(Dropout(0.2))
     model.add(Dense(10))
@@ -138,7 +139,7 @@ def extractFeatures(X, model):
     """
     # https://keras.io/getting-started/faq/#how-can-i-visualize-the-output-of-an-intermediate-layer
     # https://github.com/fchollet/keras/issues/1641
-    get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-2].output])
+    get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-4].output])
     layer_output = get_last_layer_output([X, 0])[0]
 
     return layer_output
@@ -551,8 +552,8 @@ args = parser.parse_args()
 
 if args.runtype == 0: 
     # preprocessing
-    N = 7292  # number of patients - should be 7292
-    totalNodes = 500  # total number of nodes for each patient - should be 500
+    N = 2000  # number of patients - should be 7292
+    totalNodes = 400  # total number of nodes for each patient - should be 500
     mdFN = "metadata-simulated"
     saveSimMetadata(mdFN, N, totalNodes)
     loadSimMetadata(mdFN)
@@ -580,16 +581,18 @@ if args.runtype == 0:
     # print "KNN model trained!"
 
     # Load a previously trained keras model
-    # kerasFN = "simulatedData/keras-model"
-    # model = load_model(kerasFN)
+    kerasFN = "simulatedData/keras-model"
+    # model.save(kerasFN)
+    model = load_model(kerasFN)
 
-    # # Generate the features for the test data set
-    # feats = extractFeatures(X_test, model)
-    # # Save the features and their classes 
+    # Generate the features for the test data set
+    feats = extractFeatures(X_test, model)
+    print feats.shape
+    # Save the features and their classes 
     featsFN = "simulatedData/node-features"
-    # saveFeatures(featsFN, feats, y_test) 
-    # # Load the feature and their classes
-    loadedFeats, loadedY = loadFeatures(featsFN)
+    saveFeatures(featsFN, feats, y_test) 
+    # Load the feature and their classes
+    loadedFeats, loadedDigitClass = loadFeatures(featsFN)
 
 elif args.runtype == 1:
     # Load MNIST data
@@ -617,7 +620,7 @@ elif args.runtype == 1:
     
     # Generate the simulated patients
     N = 2000  # number of patients - should be 7000
-    totalNodes = 500  # total number of nodes for each patient - should be 500
+    totalNodes = 400  # total number of nodes for each patient - should be 500
     patFeats = [None]*N
     ids = [None]*N
     mu = 250
@@ -647,7 +650,7 @@ elif args.runtype == 1:
             abnormalFeats = [row[0] for row in abnormals]
             abnormalImgs = [row[1] for row in abnormals]
             # add the generated features to the list for that patient
-            patFeats[i] = np.concatenate((abnormalFeats, normalFeats))
+            patFeats[i] = np.concatenate((normalFeats, abnormalFeats))
             # add the generated images to the list for that patient
             patImgs = np.concatenate((normalImgs, abnormalImgs))
             # Woo sanity check
@@ -732,7 +735,7 @@ elif args.runtype == 3:
     print "Finished sparsifying the graph!"
     # save the sparse graph for the subject
     # sparseFN = "./simulatedData/sparseGraphs" + str(args.subject).zfill(4)
-    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs/' + str(args.subject).zfill(4)
+    sparseFN = '/pylon2/ms4s88p/jms565/simulatedData/sparseGraphs/S' + str(args.subject).zfill(4)
     saveSparseGraph(sparseGraph[0], sparseFN)
     print "Sparse graph for subject " + str(args.subject) + "!"
     loaded = loadSparseGraph(sparseFN)
