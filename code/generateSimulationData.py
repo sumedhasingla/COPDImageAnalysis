@@ -222,14 +222,14 @@ def buildSubjectGraph(subj, patients, neighbors=3):
         if (dists[idx:idx+i, 0] == 0.0).all():
             # shift the nodes
             temp = {
-                "nodes": nodes[idx:idx+i, 1:1+neighbors],
-                "dists": dists[idx:idx+i, 1:1+neighbors]
+                "nodes": nodes[idx:idx+i, 1:],
+                "dists": dists[idx:idx+i, 1:]
             }
         else: 
             # no shift needed
             temp = {
-                "nodes": nodes[idx:idx+i, 0:neighbors],
-                "dists": dists[idx:idx+i, 0:neighbors]
+                "nodes": nodes[idx:idx+i, :neighbors],
+                "dists": dists[idx:idx+i, :neighbors]
             }
         idx = idx + i
         subjDB.append(temp)
@@ -646,8 +646,8 @@ elif args.runtype == 1:
         # select subset of indices from list
         subset = permutations[idx:idx+totalNodes-yRound]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-        # normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
-        normalFeats = loadedFeats[subset]
+        normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        # normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
         if yRound > 0.0: 
             abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(yRound)]

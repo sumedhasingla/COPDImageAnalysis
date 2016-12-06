@@ -14,7 +14,7 @@ superMetaData = {
 
 for i in xrange(4):
     # load subj i graph
-    subi = np.load("./sparseGraphs/"+str(i).zfill(4)+".npz")
+    subi = np.load("./simulatedData/S"+str(i).zfill(4)+".npz")
     # subi = np.load("/pylon1/ms4s88p/jms565/sparseGraphs/"+str(i+1).zfill(4)+".npz")
     mati = sp.csr_matrix((subi['data'], subi['indices'], subi['indptr']), shape=subi['shape'])
     print "------------------ Subject " + str(i) + " ----------------"
@@ -29,11 +29,11 @@ for i in xrange(4):
     print "  Max # elements in each row: " + str((mati>0).sum(axis=1).max())
     # check to see if the number of cols w/ 4 == shape of mat
     print "  Shape of the matrix: " + str(mati.shape)
-    print "  Number sp in subj i: " + str(superMetaData["subjectSuperPixels"][i])
+    # print "  Number sp in subj i: " + str(superMetaData["subjectSuperPixels"][i])
     # check to see how many nonzero values are in the matrix
     print "  Number of nonzero values: " + str((mati>0).sum())
     print "  According to the matrix: " + str(mati.nnz)
-    print "  Should be: " + str(3*superMetaData["totalSuperPixels"])
+    # print "  Should be: " + str(3*superMetaData["totalSuperPixels"])
     # check to make sure there's the same number of values in the subi lists
     print "  Number of data points in file: " + str(len(subi["data"]))
     print "  Number of index points in file: " + str(len(subi["indices"]))
