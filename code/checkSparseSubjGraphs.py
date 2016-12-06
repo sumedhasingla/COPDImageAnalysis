@@ -3,13 +3,13 @@ import numpy as np
 import scipy.sparse as sp
 
 
-loader = np.load("test-metadata.npz")
-superMetaData = {
-    "totalSuperPixels": loader['totalSP'],
-    "subjectSuperPixels": loader['subjSP'],
-    "superPixelIndexingStart": loader['indStart'],
-    "superPixelIndexingEnd": loader['indEnd']
-}
+# loader = np.load("test-metadata.npz")
+# superMetaData = {
+#     "totalSuperPixels": loader['totalSP'],
+#     "subjectSuperPixels": loader['subjSP'],
+#     "superPixelIndexingStart": loader['indStart'],
+#     "superPixelIndexingEnd": loader['indEnd']
+# }
 
 
 for i in xrange(4):

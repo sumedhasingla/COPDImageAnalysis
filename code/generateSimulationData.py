@@ -104,7 +104,7 @@ def trainModel(X_train, y_train, X_test, y_test):
     # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
-def generateAbnormalNode(feats, imgs):
+def generateAbnormalNode(imgs, normalMax, model):
     """
     Choose 2 images from the MNIST dataset to combine into an "abnormal" node
 
@@ -120,14 +120,15 @@ def generateAbnormalNode(feats, imgs):
     # generate a random number to select a 0 image
     idx0 = np.random.randint(0, len(feats[0])-1)
     # select a 1 image
-    v1 = feats[1][idx1]
     i1 = imgs[1][idx1]
     # select a 0 image
-    v0 = feats[0][idx0]
     i0 = imgs[1][idx0]
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
-    abFeat = v1+v0
     abImg = i0+i1
+    # normalize the image
+    abImg[abImg > normalMax] = normalMax
+    # get the features
+    abFeat = extractFeatures(abImg, model)
     return [abFeat, abImg]
 
 def extractFeatures(X, model):
@@ -609,9 +610,13 @@ elif args.runtype == 1:
     X_test /= 255
     y_test = A_y
 
-    # Generate the features for the test data set 
+    # Load the features for the test data set 
     featsFN = "simulatedData/node-features"
     loadedFeats, loadedY = loadFeatures(featsFN)
+
+    # Load a previously trained keras model
+    kerasFN = "simulatedData/keras-model"
+    model = load_model(kerasFN)
 
     # get the data for generating the abnormal nodes
     mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
@@ -637,6 +642,7 @@ elif args.runtype == 1:
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
     idx = 0
+    normalMax = X_test[0].max()
     for i in xrange(N):
         # get a rounded version of the current y
         yRound = np.floor(yClipped[i]).astype(int)
@@ -650,7 +656,7 @@ elif args.runtype == 1:
         # normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
         if yRound > 0.0: 
-            abnormals = [generateAbnormalNode([zerosFeats, onesFeats], [zerosImgs, onesImgs]) for j in xrange(yRound)]
+            abnormals = [generateAbnormalNode([zerosImgs, onesImgs], normalMax, model) for j in xrange(yRound)]
             abnormalFeats = [row[0] for row in abnormals]
             abnormalImgs = [row[1] for row in abnormals]
             # add the generated features to the list for that patient
