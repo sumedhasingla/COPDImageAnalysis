@@ -626,11 +626,11 @@ elif args.runtype == 1:
     totalNodes = 400  # total number of nodes for each patient - should be 500
     patFeats = [None]*N
     ids = [None]*N
-    mu = 250
-    sigma = 200
+    mu = totalNodes/2
+    sigma = 175
     img0 = None
     yDist = np.random.normal(mu, sigma, N*5)
-    yClipped = yDist[((yDist >= 0) & (yDist < 500))]
+    yClipped = yDist[((yDist >= 0) & (yDist <= totalNodes))]
     y = yClipped[:N]
     # generate list of permuted indices
     permutations = [np.random.permutation(len(loadedFeats))]*100
@@ -639,7 +639,7 @@ elif args.runtype == 1:
     idx = 0
     for i in xrange(N):
         # get a rounded version of the current y
-        yRound = np.floor(y[i]).astype(int)
+        yRound = np.floor(yClipped[i]).astype(int)
         # update the metadata for the patient
         ids[i] = "S"+str(i).zfill(4)
         patImgs = []
@@ -660,9 +660,10 @@ elif args.runtype == 1:
             # Woo sanity check
             print "Iteration " + str(i)
             print "     Updated index: " + str(idx)
-            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            print "            yRound: " + str(yRound)
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
             print "   Len(normalImgs): " + str(len(normalImgs))
-            print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " y[i]: " + str(y[i])
+            print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " yRound: " + str(yRound)
             print " Len(abnormalImgs): " + str(len(abnormalImgs))
             print "     Len(patFeats): " + str(len(patFeats[i]))
         else: 
@@ -671,7 +672,8 @@ elif args.runtype == 1:
             # Woo sanity check
             print "Iteration " + str(i)
             print "     Updated index: " + str(idx)
-            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-y[i]: " + str(totalNodes-y[i])
+            print "            yRound: " + str(yRound)
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
             print "   Len(normalImgs): " + str(len(normalImgs))
             print "     Len(patFeats): " + str(len(patFeats[i]))
 
