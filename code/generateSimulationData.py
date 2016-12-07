@@ -642,7 +642,7 @@ elif args.runtype == 1:
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
     idx = 0
-    normalMax = X_test[0].max()
+    normalMax = 255
     for i in xrange(N):
         # get a rounded version of the current y
         yRound = np.floor(yClipped[i]).astype(int)
