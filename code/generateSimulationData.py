@@ -116,9 +116,9 @@ def generateAbnormalNode(imgs, normalMax, model):
     - abnormal: the abnormal node 
     """
     # generate a random number to select a 1 image
-    idx1 = np.random.randint(0, len(feats[0])-1)
+    idx1 = np.random.randint(0, len(imgs[0])-1)
     # generate a random number to select a 0 image
-    idx0 = np.random.randint(0, len(feats[0])-1)
+    idx0 = np.random.randint(0, len(imgs[0])-1)
     # select a 1 image
     i1 = imgs[1][idx1]
     # select a 0 image
