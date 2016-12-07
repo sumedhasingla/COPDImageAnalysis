@@ -629,8 +629,8 @@ elif args.runtype == 1:
     zerosImgs = X_test[mnistZeroIndices]
     
     # Generate the simulated patients
-    N = 10  # number of patients - should be 7000
-    totalNodes = 400  # total number of nodes for each patient - should be 500
+    N = 2000  # number of patients - should be 2000
+    totalNodes = 400  # total number of nodes for each patient - should be 400
     patFeats = [None]*N
     ids = ["S"+str(i).zfill(4) for i in xrange(N)]
     mu = totalNodes/2
@@ -663,12 +663,12 @@ elif args.runtype == 1:
     for i in xrange(N):    
         patImgs = []
         # select subset of indices from list - normal nodes
-        normalSubset = permutations[idxN:idxN+totalNodes-yRound[i]]
+        subset = permutations[idxN:idxN+totalNodes-yRound[i]]
         # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
         normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
         # normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
-        if yRound > 0.0: 
+        if yRound[i] > 0.0: 
             abnormalFeats = abFeats[idxA:idxA+yRound[i]]
             abnormalImgs = abImgs[idxA:idxA+yRound[i]]
             # add the generated features to the list for that patient
@@ -698,8 +698,8 @@ elif args.runtype == 1:
             img0 = patImgs
 
         # increment index counter
-        idxN += totalNodes-yRound
-        idxA += yRound
+        idxN += totalNodes-yRound[i]
+        idxA += yRound[i]
         imgFN = "./simulatedData/simulatedImages/" + ids[i]
         saveSimImg(imgFN, patImgs)
 
