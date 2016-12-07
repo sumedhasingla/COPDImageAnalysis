@@ -655,9 +655,9 @@ elif args.runtype == 1:
         # normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
         if yRound > 0.0: 
-            abnormals = [generateAbnormalNode(zerosImgs, onesImgs, model) for j in xrange(yRound)]
-            abnormalFeats = [row[0] for row in abnormals]
-            abnormalImgs = [row[1] for row in abnormals]
+            abnormals = np.asarray[generateAbnormalNode(zerosImgs, onesImgs, model) for j in xrange(yRound)]
+            abnormalFeats = np.asarray([row[0] for row in abnormals])
+            abnormalImgs = np.asarray[row[1] for row in abnormals])
             # add the generated features to the list for that patient
             patFeats[i] = np.concatenate((normalFeats, abnormalFeats))
             # add the generated images to the list for that patient
