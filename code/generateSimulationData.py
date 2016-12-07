@@ -104,7 +104,7 @@ def trainModel(X_train, y_train, X_test, y_test):
     # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
-def generateAbnormalNode(imgs, normalMax, model):
+def generateAbnormalNode(zeroImgs, oneImgs, model, normalMax=255):
     """
     Choose 2 images from the MNIST dataset to combine into an "abnormal" node
 
@@ -116,19 +116,19 @@ def generateAbnormalNode(imgs, normalMax, model):
     - abnormal: the abnormal node 
     """
     # generate a random number to select a 1 image
-    idx1 = np.random.randint(0, len(imgs[0])-1)
+    idx1 = np.random.randint(0, len(oneImgs[0])-1)
     # generate a random number to select a 0 image
-    idx0 = np.random.randint(0, len(imgs[0])-1)
+    idx0 = np.random.randint(0, len(zeroImgs[0])-1)
     # select a 1 image
-    i1 = imgs[1][idx1]
+    i1 = oneImgs[idx1]
     # select a 0 image
-    i0 = imgs[1][idx0]
+    i0 = zeroImgs[idx0]
     # combine the 2 images into 1 (add them, values are btwn 0 and 1)
     abImg = i0+i1
     # normalize the image
     abImg[abImg > normalMax] = normalMax
     # get the features
-    abFeat = extractFeatures(abImg, model)
+    abFeat = extractFeatures(abImg.reshape((1, 784)), model)
     return [abFeat, abImg]
 
 def extractFeatures(X, model):
@@ -642,7 +642,6 @@ elif args.runtype == 1:
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
     idx = 0
-    normalMax = 255
     for i in xrange(N):
         # get a rounded version of the current y
         yRound = np.floor(yClipped[i]).astype(int)
@@ -656,7 +655,7 @@ elif args.runtype == 1:
         # normalFeats = loadedFeats[subset]
         normalImgs = X_test[subset]
         if yRound > 0.0: 
-            abnormals = [generateAbnormalNode([zerosImgs, onesImgs], normalMax, model) for j in xrange(yRound)]
+            abnormals = [generateAbnormalNode(zerosImgs, onesImgs, model) for j in xrange(yRound)]
             abnormalFeats = [row[0] for row in abnormals]
             abnormalImgs = [row[1] for row in abnormals]
             # add the generated features to the list for that patient
