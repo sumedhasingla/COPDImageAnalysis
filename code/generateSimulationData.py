@@ -104,13 +104,15 @@ def trainModel(X_train, y_train, X_test, y_test):
     # model.save(fn)
     return model  # or return the weights of the second to last layer?
 
-def generateAbnormalNode(zeroImgs, oneImgs, normalMax=255):
+def generateAbnormalNode(zeroImgs, oneImgs, n, model, normalMax=255):
     """
     Choose 2 images from the MNIST dataset to combine into an "abnormal" node
 
     Inputs:
     - mnistOnes: vectorized images of "1"s 
     - mnistZeros: vectorized images of "0"s
+    - n:
+    - model: keras model
 
     Returns:
     - abnormal: the abnormal node 
@@ -128,11 +130,11 @@ def generateAbnormalNode(zeroImgs, oneImgs, normalMax=255):
     # normalize the image
     abImg[abImg > normalMax] = normalMax
     # get the features
-    abFeat = extractFeatures(abImg.reshape((1, 784)))
+    abFeat = extractFeatures(abImg.reshape((n, 784)), model)
     # abFeat = extractFeatures(abImg)
     return [abFeat, abImg]
 
-def extractFeatures(X):
+def extractFeatures(X, model):
     """
     Extract the features of X using the activation layer of the model
 
@@ -144,68 +146,11 @@ def extractFeatures(X):
     """
     # https://keras.io/getting-started/faq/#how-can-i-visualize-the-output-of-an-intermediate-layer
     # https://github.com/fchollet/keras/issues/1641
-    global model
-    
     # extract layer
     get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-4].output])
     layer_output = get_last_layer_output([X, 0])[0]
 
     return layer_output
-
-def generateSimulatedSubjects(yRound, subId, permutations, loadedFeats, X_test, zerosImgs, onesImgs, totalNodes=400):
-    """
-    Trying to parallelize the patient generation, it's set to take 2 days currently
-
-    Inputs
-    - yRound: number of abnormal nodes to generate (integer)
-    - id: the id of the subject
-
-
-    Return
-    - features for new patient
-    """
-    global idx
-    patImgs = []
-    # select subset of indices from list
-    subset = permutations[idx:idx+totalNodes-yRound]
-    # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-    nFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
-    # normalFeats = loadedFeats[subset]
-    nImgs = X_test[subset]
-    if yRound > 0.0: 
-        abnormals = [generateAbnormalNode(zerosImgs, onesImgs) for j in xrange(yRound)]
-        abFeats = np.asarray([row[0] for row in abnormals]).squeeze()
-        abImgs = np.asarray([row[1] for row in abnormals]).squeeze()
-        # add the generated features to the list for that patient
-        feats = np.concatenate((nFeats, abFeats))
-        # add the generated images to the list for that patient
-        imgs = np.concatenate((nImgs, abImgs))
-        # Woo sanity check
-        print "Iteration " + str(i)
-        print "     Updated index: " + str(idx)
-        print "            yRound: " + str(yRound)
-        print "  Len(normalNodes): " + str(len(nFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
-        print "   Len(normalImgs): " + str(len(nImgs))
-        print "Len(abnormalNodes): " + str(len(abFeats)) + " yRound: " + str(yRound)
-        print " Len(abnormalImgs): " + str(len(abImgs))
-        print "     Len(patFeats): " + str(len(feats))
-    else: 
-        feats = nFeats
-        imgs = nImgs
-        # Woo sanity check
-        print "Iteration " + str(i)
-        print "     Updated index: " + str(idx)
-        print "            yRound: " + str(yRound)
-        print "  Len(normalNodes): " + str(len(nFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
-        print "   Len(normalImgs): " + str(len(nImgs))
-        print "     Len(patFeats): " + str(len(feats))
-
-    # increment index counter
-    idx += totalNodes-yRound
-    print "Updated permutation index: " + str(idx)
-    imgFN = "./simulatedData/simulatedImages/" + subId
-    saveSimImg(imgFN, imgs)
-    return feats
 
 def computePairwiseSimilarities(patients, y):
     """
@@ -678,77 +623,85 @@ elif args.runtype == 1:
     model = load_model(kerasFN)
 
     # get the data for generating the abnormal nodes
-    mnistOneIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==1 ]
-    mnistZeroIndices = [i for i in xrange(len(loadedY)) if loadedY[i]==0 ]
-    onesFeats = loadedFeats[mnistOneIndices]
-    zerosFeats = loadedFeats[mnistZeroIndices]
+    mnistOneIndices = [i for i in xrange(len(y_test)) if y_test[i]==1 ]
+    mnistZeroIndices = [i for i in xrange(len(y_test)) if y_test[i]==0 ]
     onesImgs = X_test[mnistOneIndices]
     zerosImgs = X_test[mnistZeroIndices]
     
     # Generate the simulated patients
-    N = 1  # number of patients - should be 7000
+    N = 10  # number of patients - should be 7000
     totalNodes = 400  # total number of nodes for each patient - should be 500
     patFeats = [None]*N
     ids = ["S"+str(i).zfill(4) for i in xrange(N)]
     mu = totalNodes/2
     sigma = 175
     img0 = None
+    # generate the abnormal nodes
     yDist = np.random.normal(mu, sigma, N*5)
     yClipped = yDist[((yDist >= 0) & (yDist <= totalNodes))]
-    y = yClipped[:N]   
+    y = yClipped[:N]
+    yRound = np.floor(y).astype(int)
+    totalY = np.sum(yRound)
+    # select permutation of "1" images
+    perm1 = np.hstack([np.random.permutation(len(onesImgs))]*200)
+    # select permutation of "0" images
+    perm0 = np.hstack([np.random.permutation(len(zerosImgs))]*200)
+    # get the images
+    subsetImgs0 = zerosImgs[perm0]
+    subsetImgs1 = onesImgs[perm1]
+    # combine the images
+    abImgs = subsetImgs1+subsetImgs1
+    abImgs[abImgs > 1] = 1.0
+    # get the features for the abnormal images
+    abFeats = extractFeatures(abImgs, model)
     # generate list of permuted indices
     permutations = [np.random.permutation(len(loadedFeats))]*100
     permutations = np.hstack(permutations) # this should be 35000*100 long (1D)
     print "Generating simulated patients..."
-    idx = 0
-    results = Parallel(n_jobs=args.cores, backend='threading')(delayed(generateSimulatedSubjects)(np.floor(yClipped[i]).astype(int), ids[i], permutations, loadedFeats, X_test, zerosImgs, onesImgs ) for i in xrange(N))
-    # results = generateSimulatedSubjects(np.floor(yClipped[i]).astype(int), ids[i], permutations, loadedFeats, X_test, model, zerosImgs, onesImgs )
-    # for i in xrange(N):
-    #     # get a rounded version of the current y
-    #     yRound = np.floor(yClipped[i]).astype(int)
-        
-    #     patImgs = []
-    #     # select subset of indices from list
-    #     subset = permutations[idx:idx+totalNodes-yRound]
-    #     # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
-    #     normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
-    #     # normalFeats = loadedFeats[subset]
-    #     normalImgs = X_test[subset]
-    #     if yRound > 0.0: 
-    #         abnormals = [generateAbnormalNode(zerosImgs, onesImgs, model) for j in xrange(yRound)]
-    #         abnormalFeats = np.asarray([row[0] for row in abnormals]).squeeze()
-    #         abnormalImgs = np.asarray([row[1] for row in abnormals]).squeeze()
-    #         # add the generated features to the list for that patient
-    #         patFeats[i] = np.concatenate((normalFeats, abnormalFeats))
-    #         # add the generated images to the list for that patient
-    #         patImgs = np.concatenate((normalImgs, abnormalImgs))
-    #         # Woo sanity check
-    #         print "Iteration " + str(i)
-    #         print "     Updated index: " + str(idx)
-    #         print "            yRound: " + str(yRound)
-    #         print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
-    #         print "   Len(normalImgs): " + str(len(normalImgs))
-    #         print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " yRound: " + str(yRound)
-    #         print " Len(abnormalImgs): " + str(len(abnormalImgs))
-    #         print "     Len(patFeats): " + str(len(patFeats[i]))
-    #     else: 
-    #         patFeats[i] = normalFeats
-    #         patImgs = normalImgs
-    #         # Woo sanity check
-    #         print "Iteration " + str(i)
-    #         print "     Updated index: " + str(idx)
-    #         print "            yRound: " + str(yRound)
-    #         print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound)
-    #         print "   Len(normalImgs): " + str(len(normalImgs))
-    #         print "     Len(patFeats): " + str(len(patFeats[i]))
+    idxN = 0
+    idxA = 0
+    for i in xrange(N):    
+        patImgs = []
+        # select subset of indices from list - normal nodes
+        normalSubset = permutations[idxN:idxN+totalNodes-yRound[i]]
+        # generate the nodes and add some small (<= 1% of max feature value) Gaussian noise
+        normalFeats = loadedFeats[subset] + np.random.rand(len(subset), len(loadedFeats[0]))*loadedFeats.max()/100.0
+        # normalFeats = loadedFeats[subset]
+        normalImgs = X_test[subset]
+        if yRound > 0.0: 
+            abnormalFeats = abFeats[idxA:idxA+yRound[i]]
+            abnormalImgs = abImgs[idxA:idxA+yRound[i]]
+            # add the generated features to the list for that patient
+            patFeats[i] = np.concatenate((normalFeats, abnormalFeats))
+            # add the generated images to the list for that patient
+            patImgs = np.concatenate((normalImgs, abnormalImgs))
+            # Woo sanity check
+            print "Iteration " + str(i)
+            print "            yRound: " + str(yRound[i])
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound[i])
+            print "   Len(normalImgs): " + str(len(normalImgs))
+            print "Len(abnormalNodes): " + str(len(abnormalFeats)) + " yRound: " + str(yRound[i])
+            print " Len(abnormalImgs): " + str(len(abnormalImgs))
+            print "     Len(patFeats): " + str(len(patFeats[i]))
+        else: 
+            patFeats[i] = normalFeats
+            patImgs = normalImgs
+            # Woo sanity check
+            print "Iteration " + str(i)
+            print "     Updated index: " + str(idx)
+            print "            yRound: " + str(yRound[i])
+            print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound[i])
+            print "   Len(normalImgs): " + str(len(normalImgs))
+            print "     Len(patFeats): " + str(len(patFeats[i]))
 
-    #     if i == 0:
-    #         img0 = patImgs
+        if i == 0:
+            img0 = patImgs
 
-    #     # increment index counter
-    #     idx += totalNodes-yRound
-    #     imgFN = "./simulatedData/simulatedImages/" + ids[i]
-    #     saveSimImg(imgFN, patImgs)
+        # increment index counter
+        idxN += totalNodes-yRound
+        idxA += yRound
+        imgFN = "./simulatedData/simulatedImages/" + ids[i]
+        saveSimImg(imgFN, patImgs)
 
     print "Patients have been simulated!"
 
