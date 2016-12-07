@@ -688,7 +688,6 @@ elif args.runtype == 1:
             patImgs = normalImgs
             # Woo sanity check
             print "Iteration " + str(i)
-            print "     Updated index: " + str(idx)
             print "            yRound: " + str(yRound[i])
             print "  Len(normalNodes): " + str(len(normalFeats)) + " totalNodes-yRound: " + str(totalNodes-yRound[i])
             print "   Len(normalImgs): " + str(len(normalImgs))
