@@ -174,8 +174,8 @@ def computePairwiseSimilarities(patients, y):
     # details: use the kl divergence, find 3 nearest neighbors
     #          not sure what the pairwise picker line does?
     #          rbf and projectPSD help ensure the data is separable?
-    distEstModel = Pipeline([
-        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3], n_jobs=-1, version='fast')),
+    distEstModel = Pipeline([ # div_funcs=['kl'], rewrite this to actually use PairwisePicker correctly next time
+        ('divs', KNNDivergenceEstimator(div_funcs=['hellinger'], Ks=[3], n_jobs=-1, version='fast')),
         ('pick', PairwisePicker((0, 0))),
         ('symmetrize', Symmetrize())#,
         # ('rbf', RBFize(gamma=1, scale_by_median=True)),
@@ -729,7 +729,8 @@ elif args.runtype == 2:
     sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
     print "Similarities calculated!"
     # save the similarities
-    kernelFN = "./simulatedData/kernel-2000-sym-v2"
+    kernelFN = "./simulatedData/kernel-2000-sym-he"
+    # kernelFN = "./simulatedData/kernel-2000-sym-v2"
     saveSimilarities(kernelFN, sims)
     # load the similarities to check
     loadedK = loadSimilarities(kernelFN)
