@@ -172,7 +172,7 @@ def loadSimFeats(fn):
     with open(fn+"-feats.data.p", "rb") as f:
         loader = pk.load(f)
     f.close()
-    print "Simluated patient features and metadata loaded!"
+    print("Simluated patient features and metadata loaded!")
     return loader['ids'], np.asarray(loader['y']), loader['features']
 
 #-----------------------------------------------------------------------------------------
