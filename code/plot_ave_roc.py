@@ -5,7 +5,6 @@ Created on 18 Dec 2012
 '''
 
 #plots average roc curve for set of roc curves using linear interpolation
-import matplotlib.pyplot as plt
 from matplotlib.pyplot import plot, show, figure, xlim, ylim, title, scatter
 from numpy import array,random,arange,zeros
 from random import choice
@@ -90,14 +89,13 @@ def plotAve(xss,yss):
     #plots single roc corresponding to average of unsorted set of xs,ys (FP,TP) 
     roc_ave = RocSet(xss,yss)
     xs,ys = roc_ave.plot_values(N=150)
-    plt.figure()
-    plt.plot(xs,ys)
+    plot(xs,ys)
     title('Average ROC')
     # for xs,ys in zip(xss,yss):
     #     #title('ROC %i'%i)
     #     scatter(xs,ys)
-    plt.xlim((0.,1.))
-    plt.ylim((0.,1.))
+    xlim((0.,1.))
+    ylim((0.,1.))
     # i=1
     # for xs,ys in zip(xss,yss):
     #     figure()
@@ -106,7 +104,7 @@ def plotAve(xss,yss):
     #     xlim((0.,1.))
     #     ylim((0.,1.))
     #     i+=1
-    plt.show()
+    show()
     
 def genRandom(size=3):
     #generate |size| random roc curves (xs=FP, ys=TP)
