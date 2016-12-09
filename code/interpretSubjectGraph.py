@@ -429,9 +429,9 @@ if __name__ == '__main__':
         # generate list of ROC curves
         for i in xrange(N):
             #load the known labels (whether a node is abnormal or not)
-            yTrue = np.zeros((patches - y[i]))
+            yTrue = list(np.zeros((patches - y[i])))
             if y[i] > 0.0:
-                yTrue.extend(np.ones((y[i])))
+                yTrue.extend(list(np.ones((y[i]))))
             print(len(yTrue))
             # load the coefficients
             coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
