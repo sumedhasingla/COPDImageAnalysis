@@ -428,7 +428,7 @@ if __name__ == '__main__':
             #load the known labels (whether a node is abnormal or not)
             featsFN = "./simulatedData/node-features"
             ids, y, feats = loadSimFeats(featsFN)
-            yTrue = [np.zeros((patches - y)) np.ones((y))]
+            yTrue = [np.zeros((patches - y)), np.ones((y))]
             print(len(yTrue))
             # load the coefficients
             coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
