@@ -157,6 +157,24 @@ def loadInterpModel(fn):
         model = pk.load(f)
     return model
 
+def loadSimFeats(fn):
+    """
+    Load a previously saved simulated subject from a .npz file.
+
+    Inputs:
+    - fn: filename/directory to load from (extensionless)
+
+    Returns:
+    - features: single patient's features/nodes
+    - ids: subject ids
+    - y: the label (number of abnormal nodes)
+    """
+    with open(fn+"-feats.data.p", "rb") as f:
+        loader = pk.load(f)
+    f.close()
+    print "Simluated patient features and metadata loaded!"
+    return loader['ids'], np.asarray(loader['y']), loader['features']
+
 #-----------------------------------------------------------------------------------------
 # Interpretation functions
 #-----------------------------------------------------------------------------------------
@@ -400,20 +418,23 @@ if __name__ == '__main__':
         print("Finished interpreting subject: ", sid)
 
     elif args['runtype'] == 2:
-        # not yet implemented
-        N = 2000
+        # ROC curve
+        N = 10
+        patches = 400
         xFPR = [[]*N]
         yTPR = [[]*N]
         # generate list of ROC curves
         for i in xrange(N):
-            #load the known labels (predictions)
-            predFN = "./simulatedData/interpretation/predictions.hdf5"
-            yTrue = loadPredictions(predFN)
-            #load the coefficients
+            #load the known labels (whether a node is abnormal or not)
+            featsFN = "./simulatedData/node-features"
+            ids, y, feats = loadSimFeats(featsFN)
+            yTrue = [np.zeros((patches - y)) np.ones((y))]
+            print(len(yTrue))
+            # load the coefficients
             coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
             yPred = loadCoeffs(coeffFN)
             #generate the ROC
-            fpr, tpr = slm.roc_curve()
+            fpr, tpr = slm.roc_curve(yTrue, yPred)
             # append new tpr and fpr values to existing lists
             xFPR[i] = fpr
             yTPR[i] = tpr
