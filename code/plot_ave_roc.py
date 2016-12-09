@@ -96,14 +96,14 @@ def plotAve(xss,yss):
     #     scatter(xs,ys)
     xlim((0.,1.))
     ylim((0.,1.))
-    i=1
-    for xs,ys in zip(xss,yss):
-        figure()
-        title('ROC %i'%i)
-        scatter(xs,ys)
-        xlim((0.,1.))
-        ylim((0.,1.))
-        i+=1
+    # i=1
+    # for xs,ys in zip(xss,yss):
+    #     figure()
+    #     title('ROC %i'%i)
+    #     scatter(xs,ys)
+    #     xlim((0.,1.))
+    #     ylim((0.,1.))
+    #     i+=1
     show()
     
 def genRandom(size=3):
@@ -127,6 +127,10 @@ def genRandom(size=3):
 
 def test():
     xss,yss = genRandom()
+    print len(xss)
+    print xss[0]
+    print len(yss)
+    print yss[0]
     plotAve(xss,yss)
     
 if __name__ == '__main__':

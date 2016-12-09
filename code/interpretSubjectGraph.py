@@ -10,7 +10,8 @@ import numpy as np
 import cPickle as pickle
 import pickle as pk
 
-# from plot_ave_roc import *
+from plot_ave_roc import plotAve
+import sklearn.metrics as slm
 
 """
 Notes:
@@ -361,7 +362,6 @@ if __name__ == '__main__':
         f0.close()
         f1.close()
 
-
     elif args['runtype'] == 1: 
         f = h5py.File(preProcFileRoot+args['subjectId']+'.hdf5', "r")
         # read environment variables 
@@ -401,6 +401,21 @@ if __name__ == '__main__':
 
     elif args['runtype'] == 2:
         # not yet implemented
-        # generate set of ROC curves
-        # use Interpolation.plotAve(xss, yss)
-        k = 1
+        N = 2000
+        xFPR = [[]*N]
+        yTPR = [[]*N]
+        # generate list of ROC curves
+        for i in xrange(N):
+            #load the known labels (predictions)
+            predFN = "./simulatedData/interpretation/predictions.hdf5"
+            yTrue = loadPredictions(predFN)
+            #load the coefficients
+            coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
+            yPred = loadCoeffs(coeffFN)
+            #generate the ROC
+            fpr, tpr = slm.roc_curve()
+            # append new tpr and fpr values to existing lists
+            xFPR[i] = fpr
+            yTPR[i] = tpr
+        plotAve(xss, yss)
+        print("Finished generating average ROC!")
