@@ -12,6 +12,9 @@ import pickle as pk
 
 from plot_ave_roc import plotAve
 import sklearn.metrics as slm
+import matplotlib
+from matplotlib.pyplot import plot, show, figure, xlim, ylim, title, scatter
+matplotlib.use('Agg')
 
 """
 Notes:
@@ -421,25 +424,27 @@ if __name__ == '__main__':
         # ROC curve
         N = 10
         patches = 400
-        xFPR = [[]*N]
-        yTPR = [[]*N]
+        xFPR = [[]]*N
+        yTPR = [[]]*N
 
         featsFN = "./simulatedData/simulatedSubjects"
         ids, y, feats = loadSimFeats(featsFN)
         # generate list of ROC curves
         for i in xrange(N):
+            print("Current y: ", np.floor(y[i]))
+            print("400-y: ", patches-np.floor(y[i]))
             #load the known labels (whether a node is abnormal or not)
-            yTrue = list(np.zeros((patches - y[i])))
+            yTrue = list(np.zeros((patches - np.floor(y[i])).astype(int)))
             if y[i] > 0.0:
-                yTrue.extend(list(np.ones((y[i]))))
+                yTrue.extend(list(np.ones((np.floor(y[i]))).astype(int)))
             print(len(yTrue))
             # load the coefficients
             coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
             yPred = loadCoeffs(coeffFN)
             #generate the ROC
-            fpr, tpr = slm.roc_curve(yTrue, yPred)
+            fpr, tpr, thresh = slm.roc_curve(yTrue, yPred)
             # append new tpr and fpr values to existing lists
             xFPR[i] = fpr
             yTPR[i] = tpr
-        plotAve(xss, yss)
+        plotAve(xFPR, yTPR)
         print("Finished generating average ROC!")
