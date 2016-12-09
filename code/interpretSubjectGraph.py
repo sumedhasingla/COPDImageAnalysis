@@ -430,7 +430,7 @@ if __name__ == '__main__':
         for i in xrange(N):
             #load the known labels (whether a node is abnormal or not)
             yTrue = np.zeros((patches - y[i]))
-            if y[i] > 0.0
+            if y[i] > 0.0:
                 yTrue.extend(np.ones((y[i])))
             print(len(yTrue))
             # load the coefficients
