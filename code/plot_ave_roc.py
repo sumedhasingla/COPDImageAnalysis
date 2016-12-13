@@ -5,7 +5,9 @@ Created on 18 Dec 2012
 '''
 
 #plots average roc curve for set of roc curves using linear interpolation
-from matplotlib.pyplot import plot, show, figure, xlim, ylim, title, scatter
+# import matplotlib
+# matplotlib.use('Agg')
+from matplotlib.pyplot import plot, show, figure, xlim, ylim, title, scatter, savefig, colorbar
 from numpy import array,random,arange,zeros
 from random import choice
 
@@ -13,8 +15,8 @@ class Interpolation(object):
     
     def __init__(self,xs,ys):
         assert len(xs)==len(ys)
-#        assert self._monotonically_increasing(xs)
-#        assert self._monotonically_increasing(ys)
+        # assert self._monotonically_increasing(xs)
+        # assert self._monotonically_increasing(ys)
         xs1, ys1 = self._sort_xys(xs,ys) #throws error if xs,ys not monotonically increasing
         self.xs, self.ys = self._remove_dups(xs1,ys1) #remove duplicate x values (taking max of corresponding y values)
         self.min_x = self.xs[0]
@@ -85,17 +87,34 @@ class RocSet(object):
         ys = ys/float(len(self.rocs)) #average
         return xs,ys
     
-def plotAve(xss,yss):
+def plotAve(xss,yss, xss2, yss2): # , severity):
+    # import numpy as np
+    # import matplotlib.pyplot as plt
     #plots single roc corresponding to average of unsorted set of xs,ys (FP,TP) 
+    # normalize the colors to a good range
+    # print("shape severity:", severity)
+    # print("x", xss)
+    # print("y", yss)
+    # maxVal = -np.sort(-np.asarray(severity))[0]
+    # minVal = np.sort(np.asarray(severity))[0]
+    # # print("Min: ", minVal)
+    # # print("Max: ", maxVal)
+    # cm = plt.cm.get_cmap('RdYlBu_r')
+
     roc_ave = RocSet(xss,yss)
     xs,ys = roc_ave.plot_values(N=150)
-    plot(xs,ys)
+    roc_ave2 = RocSet(xss2, yss2)
+    xs2, ys2 = roc_ave2.plot_values(N=150)
+    plot(xs,ys, color='b')
+    plot(xs2, ys2, color='r')
     title('Average ROC')
-    # for xs,ys in zip(xss,yss):
-    #     #title('ROC %i'%i)
-    #     scatter(xs,ys)
-    xlim((0.,1.))
-    ylim((0.,1.))
+    # for xs,ys,subC in zip(xss,yss,severity):
+        # title('ROC %i'%i)
+        # print "SubC: " + str(type(subC)) + " " + str(subC)
+        # plt.scatter(xs[:], ys[:], c=[[subC] * len(xs)], vmin=minVal, vmax=maxVal, cmap=cm, lw=0)
+    # colorbar()
+    xlim((0.,1))
+    ylim((0.,1))
     # i=1
     # for xs,ys in zip(xss,yss):
     #     figure()
@@ -103,8 +122,11 @@ def plotAve(xss,yss):
     #     scatter(xs,ys)
     #     xlim((0.,1.))
     #     ylim((0.,1.))
+    #     # savefig("./scatter"+str(i).zfill(4)+".pdf")
     #     i+=1
     show()
+    # savefig('./roc_avg.pdf')
+    
     
 def genRandom(size=3):
     #generate |size| random roc curves (xs=FP, ys=TP)

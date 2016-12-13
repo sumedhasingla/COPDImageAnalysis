@@ -12,9 +12,9 @@ import pickle as pk
 
 from plot_ave_roc import plotAve
 import sklearn.metrics as slm
-import matplotlib
+# import matplotlib
+# matplotlib.use('Agg')
 from matplotlib.pyplot import plot, show, figure, xlim, ylim, title, scatter
-matplotlib.use('Agg')
 
 """
 Notes:
@@ -422,7 +422,7 @@ if __name__ == '__main__':
 
     elif args['runtype'] == 2:
         # ROC curve
-        N = 10
+        N = 2000
         patches = 400
         xFPR = [[]]*N
         yTPR = [[]]*N
@@ -431,20 +431,110 @@ if __name__ == '__main__':
         ids, y, feats = loadSimFeats(featsFN)
         # generate list of ROC curves
         for i in xrange(N):
-            print("Current y: ", np.floor(y[i]))
-            print("400-y: ", patches-np.floor(y[i]))
+            # print("Current y: ", np.floor(y[i]))
+            # print("400-y: ", patches-np.floor(y[i]))
             #load the known labels (whether a node is abnormal or not)
-            yTrue = list(np.zeros((patches - np.floor(y[i])).astype(int)))
-            if y[i] > 0.0:
-                yTrue.extend(list(np.ones((np.floor(y[i]))).astype(int)))
-            print(len(yTrue))
-            # load the coefficients
+            if np.floor(y[i]) > 0:
+                if np.floor(y[i]) < 400:
+                    yTrue = list(np.zeros((patches - np.floor(y[i])).astype(int)))
+                    yTrue.extend(list(np.ones((np.floor(y[i]))).astype(int)))
+                else:
+                    yTrue = list(np.ones(np.floor(y[i])).astype(int))
+                # print(len(yTrue))
+                # load the coefficients
+                coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
+                yPred = loadCoeffs(coeffFN)
+                # threshold the negative coefficients
+                yPred[yPred < 0] = 0.0
+                #generate the ROC
+                fpr, tpr, thresh = slm.roc_curve(yTrue, yPred)
+                # append new tpr and fpr values to existing lists
+                xFPR[i] = fpr
+                yTPR[i] = tpr
+            # else:
+                # print("Skipping subject", i)
+        idx = [i for i in xrange(len(yTPR)) if yTPR[i] !=[]]
+        xss = [xFPR[i] for i in idx]
+        yss = [yTPR[i] for i in idx]
+        colors = [y[i] for i in idx]
+        plotAve(xss, yss, colors)
+        print("Finished generating average ROC!")
+
+    elif args['runtype'] == 3:
+        # ROC curve
+        N = 2000
+        patches = 400
+        xFPR2 = [[]]*N
+        yTPR2 = [[]]*N
+
+        featsFN = "./simulatedData/simulatedSubjects"
+        ids, y, feats = loadSimFeats(featsFN)
+        # generate list of ROC curves
+        coeffs = [[]]*N
+        for i in xrange(N):
             coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
-            yPred = loadCoeffs(coeffFN)
-            #generate the ROC
-            fpr, tpr, thresh = slm.roc_curve(yTrue, yPred)
-            # append new tpr and fpr values to existing lists
-            xFPR[i] = fpr
-            yTPR[i] = tpr
-        plotAve(xFPR, yTPR)
+            coeffs[i] = loadCoeffs(coeffFN)
+
+        # compute std of loaded coeffs
+        sigma = np.std(coeffs)
+        print(sigma)
+
+        for i in xrange(N):
+            # print("Current y: ", np.floor(y[i]))
+            # print("400-y: ", patches-np.floor(y[i]))
+            #load the known labels (whether a node is abnormal or not)
+            if np.floor(y[i]) > 0:
+                if np.floor(y[i]) < 400:
+                    yTrue = list(np.zeros((patches - np.floor(y[i])).astype(int)))
+                    yTrue.extend(list(np.ones((np.floor(y[i]))).astype(int)))
+                else:
+                    yTrue = list(np.ones(np.floor(y[i])).astype(int))
+                # print(len(yTrue))
+                # load the coefficients
+                yPred = np.random.normal(0, sigma, patches)
+                # threshold the negative coefficients
+                yPred[yPred < 0] = 0.0
+                #generate the ROC
+                fpr, tpr, thresh = slm.roc_curve(yTrue, yPred)
+                # append new tpr and fpr values to existing lists
+                xFPR2[i] = fpr
+                yTPR2[i] = tpr
+        idx = [i for i in xrange(len(yTPR2)) if yTPR2[i] !=[]]
+        xss2 = [xFPR2[i] for i in idx]
+        yss2 = [yTPR2[i] for i in idx]
+
+        xFPR = [[]]*N
+        yTPR = [[]]*N
+        featsFN = "./simulatedData/simulatedSubjects"
+        ids, y, feats = loadSimFeats(featsFN)
+        # generate list of ROC curves
+        for i in xrange(N):
+            # print("Current y: ", np.floor(y[i]))
+            # print("400-y: ", patches-np.floor(y[i]))
+            #load the known labels (whether a node is abnormal or not)
+            if np.floor(y[i]) > 0:
+                if np.floor(y[i]) < 400:
+                    yTrue = list(np.zeros((patches - np.floor(y[i])).astype(int)))
+                    yTrue.extend(list(np.ones((np.floor(y[i]))).astype(int)))
+                else:
+                    yTrue = list(np.ones(np.floor(y[i])).astype(int))
+                # print(len(yTrue))
+                # load the coefficients
+                coeffFN = coefFileRoot+"S"+str(i).zfill(4)+".hdf5"
+                yPred = loadCoeffs(coeffFN)
+                # threshold the negative coefficients
+                yPred[yPred < 0] = 0.0
+                #generate the ROC
+                fpr, tpr, thresh = slm.roc_curve(yTrue, yPred)
+                # append new tpr and fpr values to existing lists
+                xFPR[i] = fpr
+                yTPR[i] = tpr
+            # else:
+                # print("Skipping subject", i)
+        idx = [i for i in xrange(len(yTPR)) if yTPR[i] !=[]]
+        xss = [xFPR[i] for i in idx]
+        yss = [yTPR[i] for i in idx]
+
+        # colors = [y[i] for i in idx]
+        plotAve(xss, yss, xss2, yss2)
         print("Finished generating average ROC!")
