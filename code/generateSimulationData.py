@@ -40,6 +40,11 @@ Functions:
 - trainModel: train a simple, deep neural network model on MNIST data
 - generateAbnormalNode: choose 2 random images from the MNIST data, combine them,
   and return the combined image
+- extractFeatures:
+- computePairwiseSimilarities:
+- buildSubjectGraph:
+- compileGraphSingleSubj:
+- buildBlock:
 
 Notes:
 - When extracting features and building the nn model, should the learning phase
@@ -177,9 +182,43 @@ def computePairwiseSimilarities(patients, y):
     distEstModel = Pipeline([ # div_funcs=['kl'], rewrite this to actually use PairwisePicker correctly next time
         ('divs', KNNDivergenceEstimator(div_funcs=['hellinger'], Ks=[3], n_jobs=-1, version='fast')),
         ('pick', PairwisePicker((0, 0))),
-        ('symmetrize', Symmetrize())#,
-        # ('rbf', RBFize(gamma=1, scale_by_median=True)),
-        # ('project', ProjectPSD())
+        ('symmetrize', Symmetrize()),
+        ('rbf', RBFize(gamma=1, scale_by_median=True)),
+        ('project', ProjectPSD())
+    ])
+
+    # return the pairwise similarities between the bags (patients)
+    sims = distEstModel.fit_transform(feats)
+    return sims
+
+def computePairwiseSimilarities2(patients, y):
+    """
+    Compute the pairwise similarity between bags using Dougal code
+
+    Inputs:
+    - patients: the collection of patient features
+    - y: labels (number of abnormal nodes) for each patient. Used to fit the
+         KNNDivergenceEstimator
+
+    Returns: 
+    - sims: the pairwise similarities between each patient
+    * Note: sims is a NxN symmetric matrix, where N is the number of patients
+    """
+
+    # pass the features and labels to scikit-learn Features
+    feats = Features(patients, labels=y) # directly from Dougal
+    # note: learning methods won't use the labels, this is for conveinence
+
+    # estimate the distances between the bags (patients) using KNNDivergenceEstimator
+    # details: use the kl divergence, find 3 nearest neighbors
+    #          not sure what the pairwise picker line does?
+    #          rbf and projectPSD help ensure the data is separable?
+    distEstModel = Pipeline([ # div_funcs=['kl'], rewrite this to actually use PairwisePicker correctly next time
+        ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[3], n_jobs=-1, version='fast')),
+        ('pick', PairwisePicker((0, 0))),
+        ('symmetrize', Symmetrize()),
+        ('rbf', RBFize(gamma=1, scale_by_median=True)),
+        ('project', ProjectPSD())
     ])
 
     # return the pairwise similarities between the bags (patients)
@@ -553,8 +592,9 @@ runTypeHelp += "    - 0: generate metadata"
 runTypeHelp += "    - 1: test the functions to see if they run"
 runTypeHelp += "    - 2: generate all 7292 simulated patients"
 runTypeHelp += "    - 3: generate, save, build graph for, and sparsify graph for single subject"
-runTypeHelp += "    - 4: generate kernel (similarities)"
-parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=5)
+runTypeHelp += "    - 4: generate kernel (similarities) using extracted features"
+runTypeHelp += "    - 5: generate kernel (similarities) using pixle values as features"
+parser.add_argument("-r", "--runtype", help=runTypeHelp, type=int, default=6)
 
 args = parser.parse_args()
 
@@ -784,3 +824,48 @@ elif args.runtype == 4:
     saveSimilarities(kernelFN, sims)
     # Load the similarities to test
     loadedKernel = loadSimilarities(kernelFN)
+
+elif args.runtype == 5:
+    # save the subject
+    N = 2000
+    # patientsFN = "./simulatedData/simulatedSubjects"
+    patientsFN = "/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects"
+    loadedIds, numAbnormalNodes, loadedSubjs = loadSimFeats(patientsFN)
+    # imgRoot = "./simulatedData/simulatedImages/S"
+    imgRoot = "/pylon1/ms4s88p/jms565/simulatedData/simulatedImages/S"
+    feats = [loadSimImg(imgRoot+str(i).zfill(4)) for i in xrange(N)]
+
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities(feats, numAbnormalNodes)
+    print "Similarities calculated!"
+    # save the similarities
+    kernelFN = os.environ['LOCAL']+"kernel-2000-sym-pix-he"
+    # kernelFN = "./simulatedData/kernel-2000-sym-pix-v2"
+    saveSimilarities(kernelFN, sims)
+    # load the similarities to check
+    loadedK = loadSimilarities(kernelFN)
+    # check the similarities
+    print (loadedK==sims).all()
+
+elif args.runtype == 6:
+    # save the subject
+    N = 2000
+    # patientsFN = "./simulatedData/simulatedSubjects"
+    patientsFN = "/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects"
+    loadedIds, numAbnormalNodes, loadedSubjs = loadSimFeats(patientsFN)
+    # imgRoot = "./simulatedData/simulatedImages/S"
+    imgRoot = "/pylon1/ms4s88p/jms565/simulatedData/simulatedImages/S"
+    feats = [loadSimImg(imgRoot+str(i).zfill(4)) for i in xrange(N)]
+
+    # Compute the pairwise similarity between patients using Dougal code
+    print "Calculating similarities..."
+    sims = computePairwiseSimilarities2(feats, numAbnormalNodes)
+    print "Similarities calculated!"
+    # save the similarities
+    kernelFN = os.environ['LOCAL']+"kernel-2000-sym-pix-v2"
+    saveSimilarities(kernelFN, sims)
+    # load the similarities to check
+    loadedK = loadSimilarities(kernelFN)
+    # check the similarities
+    print (loadedK==sims).all()
