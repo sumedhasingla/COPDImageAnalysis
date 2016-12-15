@@ -78,7 +78,12 @@ def loadMetadata(filename):
     Inputs:
     - filename: the name of the metadata file to load
 
-    Returns: the loaded lung dataset metadata
+    Returns: the loaded lung dataset metadata:
+    - md: dictionary containing
+        - totalSuperPixels: the total number of superpixels of all subjects combined
+        - subjectSuperPixels: the number of superpixels in each subject
+        - superPixelIndexingStart: the index indicating the start of each subject in the block
+        - superPixelIndexingEnd: the index indicating the end of each subject in the block
     """
     loader = np.load(filename+".npz")
     md = {
@@ -92,7 +97,7 @@ def loadMetadata(filename):
 
 
 md = getSubjectSizes()
-fn = "test-metadata"
+fn = "./copd-metadata"
 writeMetadata(fn, md)
 md2 = loadMetadata(fn)
 print md['totalSuperPixels']==md2['totalSuperPixels']
