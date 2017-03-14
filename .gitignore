@@ -3,5 +3,4 @@
 *pickleFiles/
 *Graphs/
 *.pyc
-*.*/
 *.pdf
