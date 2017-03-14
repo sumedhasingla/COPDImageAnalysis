@@ -1,0 +1,3 @@
+Pipeline Description (Simulated Data)
+====================
+Start with generateSimulationData.py to generate the data, build the KNN graph, and extract the divergences
