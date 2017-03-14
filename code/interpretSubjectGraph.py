@@ -305,6 +305,24 @@ def interpretSubject(targets, edgeMatrix, numNodesList, simWeight):
     return coef, clf 
    
 
+def duplicateNonZeroCoeffs(blockStarts, blockLens, coeffs, blockRow, subIdx):
+    """
+    Duplicate the nonzero coefficients of the sparse set of coefficients that
+    link back to the image space.
+
+    Inputs:
+    - blockStart: starting index of the block of interest
+    - blockLen: length of the block of interest
+    - coeffs: the sparse set of coefficients
+    - blockRow: the row of blocks for a single subject
+    - subIdx: index of the subject i (database subject) in the list of coeffs
+
+    Returns:
+    - revisedCoeffs: the revised set of coefficients
+    """
+    # Is the purpose to set the 
+    block = blockRow[blockStart:blockStart+blockLen]
+    pass
 
 if __name__ == '__main__':
     # Set up argument parser
@@ -410,6 +428,10 @@ if __name__ == '__main__':
         # saving the results
         saveCoeffs(coefFileRoot+sid+".hdf5", coef)
         saveInterpModel(pickleFileRoot+sid+".p.data", clf)
+
+        start = 0
+        length = 400
+        newCoeffs = duplicateNonZeroCoeffs(start, length, newCoeffs)
 
         # checking
         # cl = loadCoeffs(coefFileRoot+sid+".hdf5")        

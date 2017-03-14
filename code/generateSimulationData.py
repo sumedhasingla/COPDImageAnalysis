@@ -225,6 +225,22 @@ def computePairwiseSimilarities2(patients, y):
     sims = distEstModel.fit_transform(feats)
     return sims
 
+def computePairwiseSimilaritiesMMD(patients, y):
+    """
+    Compute the pairwise similarity between bags using Dougal's MMD module
+
+    Inputs:
+    - patients: the collection of patient features
+    - y: labels (number of abnormal nodes) for each subject. May not be used.
+
+    Returns:
+    - sims: the mmd pairwise similarities between each patient
+    * Note: sims is a NxN symmetric matrix, where N is the number of subjects
+    """
+    import mmd
+
+    feats = 
+
 #--------------------------------------------------------------------------
 # Imported Functions from Previous Work (WARNING: MIGHT BE MODIFIED)
 #--------------------------------------------------------------------------
@@ -760,7 +776,7 @@ elif args.runtype == 1:
     print "           Y: " + str((loadedYs==y).all())
 
 elif args.runtype == 2:
-    # save the subject
+    # load the subjects
     patientsFN = "./simulatedData/simulatedSubjects"
     loadedIds, numAbnormalNodes, loadedSubjs = loadSimFeats(patientsFN)
 
@@ -814,7 +830,8 @@ elif args.runtype == 4:
     # generate kernel
     # load the patient node information
     patientsFN = "./simulatedData/simulatedSubjects"
-    loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
+    # loadedSubjs, numAbnormalNodes = loadSimSubject(patientsFN)
+    subjIds, loadedSubjs, numAbnormalNodes = loadSimFeats(patientsFN)
     # Compute the pairwise similarity between patients using Dougal code
     print "Calculating similarities..."
     sims = computePairwiseSimilarities(loadedSubjs, numAbnormalNodes)
