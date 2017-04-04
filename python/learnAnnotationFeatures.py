@@ -22,6 +22,9 @@ from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 
+# calculating the confidence interval
+from scipy.stats import chi2
+
 # saving/loading data
 import h5py  # for saving/loading features
 import pickle as pk
@@ -73,20 +76,75 @@ def loadAnnotationClasses(filename):
     - filename: name of the file to extract labels from
 
     Returns:
-    - rawClasses: raw classes
+    - classes: class labels for each patch
+    - ids: subject ids
+    - indices: patch mask ids
     """
     # load the .csv file using pandas
     dataframe = pd.read_csv(filename)
     print('Loaded the patch classes.')
     # extract the column header associated with the labels
     col = list(dataframe)[1]
+    print(list(dataframe))
     print('Looking at column with header', col)
     # extract the label column and convert it to a list
     classes = dataframe[col].values.tolist()
+    # extract the column header associated with the ids
+    col = list(dataframe)[0]
+    # extract the id column and convert it to a list
+    ids = dataframe[col].values.tolist()
+    # and the patch count
+    col = list(dataframe)[2]
+    # extract the count column and convert it to a list
+    indices = dataframe[col].values.tolist()
     # return the list of labels
-    print('Classes for ',len(classes), 'patches have been extracted from the file!')
-    return classes
+    print('Classes for',len(classes), 'patches have been extracted from the file!')
+    return classes, ids, indices
     
+
+def loadPatchesByIndices(filename, indices):
+    """
+    Load only patches specified by the indices parameter.
+    
+    Inputs:
+    - filename: path to the pickle file to load data from
+    - indices: list of patch indices to load
+    
+    Returns:
+    - featuresList: features for the patches specified by the indices 
+    """
+    print('Going to load pickle file:', filename)
+
+    # read the pickle file
+    print("Reading pickle file...")
+    fid = open(filename, 'rb')
+    data = pk.load(open(filename, 'rb'))
+    fid.close()
+    print("Finished reading the pickle file!")
+
+    # Now convert the data from a list of lists for each subject
+    # to a single list of features
+    featuresList = []
+    patchIndexList = []
+    featureCount = 0
+    # since the data is a list of subjects, iterate through them
+    for subj in data:
+        # iterate through the patches
+        for i in xrange(len(subj['L'])):
+            # check to see if the index is in the list of indices to load
+            if subj['L'][i] in indices:
+                featureCount += 1
+                featuresList.append(subj['I'][i])
+                patchIndexList.append(subj['L'][i])
+
+    print('Extracted', featureCount, 'feature vectors from the data.')
+    
+    if patchIndexList == indices:
+        return featuresList
+    else:
+        print("*** The patch indices loaded don't match the requested patch indices! Please check me.")
+        return 0
+
 
 def saveModel(filename, model):
     """
@@ -350,10 +408,10 @@ def runCrossValidation(data, classes, nFolds=10, modelType='nn'):
             scores.append(testForest(m, data[testIdx], classes[testIdx]))
 
     scores = np.asarray(scores)
-    if modelType == 'nn':
-        print('\nAverage accuracy of the model:', np.mean(scores[:, 1]))
-    else:
-        print('\nAverage accuracy of the model:', np.mean(scores))
+    # if modelType == 'nn':
+    #     print('\nAverage accuracy of the model:', np.mean(scores[:, 1]))
+    # else:
+    #     print('\nAverage accuracy of the model:', np.mean(scores))
     return scores
 
 
@@ -378,50 +436,126 @@ def extractLearnedFeatures(model, newData):
     return layer_output
 
 
+def calculateConfidenceInterval(accuracies):
+    """
+    Given a list of accuracies, calculate the mean and confidence interval for
+    the accuracy of that model.
+
+    Inputs:
+    - accuracies: a list of accuracies of one of the cross-validated models
+
+    Returns:
+    - sampleMean: the mean of the input list
+    - ci: the upper and lower bounds for the confidence interval
+    """
+    # calculate the sample mean of the accuracies
+    sampleMean = np.mean(accuracies)
+
+    # calculate the sample standard deviation of the accuracies
+    sumOfDiffs = np.sum((accuracies-sampleMean)**2)
+
+    # get the bounds of the confidence interval (ci)
+    ciBound1 = chi2.ppf(0.95, len(accuracies)-1) 
+    ciBound2 = chi2.ppf(0.05, len(accuracies)-1)
+
+    # calculate the confidence interval itself
+    ci = [sumOfDiffs/ciBound1, sumOfDiffs/ciBound2]
+
+    print("Mean:", sampleMean)
+    print(ci)
+    # print("StdDev:", sampleStdDev)
+
+    return sampleMean, ci
+
+
+
+#----------------------------------------------------------------------------
+# MAIN SECTION
+#----------------------------------------------------------------------------
+
+# Set up argparser
+# Arguments to add
+# - root path
+# - annotation data filename
+# - annotaiton classes filename
+# - neural network model "dump" filename
+# - file to pass through the feature extraction function
+parser = argparse.ArgumentParser()
+parser.add_argument("--test-functions", help="Test the 3 model training functions", 
+                    dest=testFunctions, action='store_true')
+parser.add_argument("--cross-validate", help="Run cross-validation on all 3 models: neural network, support\nvector machine, and random forest",
+                    dest=crossValidate, action='store_true')
+parser.add_argument("--save-model", help="Train and save the neural network model",
+                    dest=saveModel, action='store_true')
+parser.add_argument("--extract-features", help="Load a learned neural network and use it to extract learned features for a single subject",
+                    dest=extractFeatures, action='store_true')
+parser.set_defaults(testFunctions=False, crossValidation=False, saveModel=False, extractFeatures=False)
+
+args = parser.parse_args()
+
 # filenames
 rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
+# rootPath = "/pylon2/ms4s88p/jms565/projects/COPDGene/"
 annotationDataFn = rootPath + 'data/histFHOG_largeRange_setting1.data.p'
-annotationClassesFn = rootPath + 'data/annotationClasses.csv'
+# annotationClassesFn = rootPath + 'data/annotationClasses.csv'
+annotationClassesFn = rootPath + 'data/goodPatchClasses.csv'
 neuralNetworkModelFn = rootPath + 'models/keras_neural_network'
+subjFeatureFn = '/home/jenna/Research/10002K_INSP_STD_BWH_COPD_BSpline_Iso1.0mm_SuperVoxel_Param30mm_fHOG_Hist_Features.csv.gz'
 
+# DO THIS PART EVERY TIME
 # load the data and the classes for the data
-features = np.asarray(loadAnnotationData(annotationDataFn))
-classes = loadAnnotationClasses(annotationClassesFn)
+classes, ids, indices = loadAnnotationClasses(annotationClassesFn)
+# features = np.asarray(loadAnnotationData(annotationDataFn))
+features = np.asarray(loadPatchesByIndices(annotationDataFn, indices))
 
 # convert the classes to categorical labels
 numericalClasses = np.asarray(convertClassesToCategorial(classes))
 categoricalClasses = np_utils.to_categorical(numericalClasses, len(np.unique(numericalClasses)))
 
 # TESTING FUNCTIONS HERE
-# Neural Network
-# m = trainNeuralNetwork(features, categoricalClasses)
-# s1 = testNeuralNetwork(m, features, categoricalClasses)
-# print('Classification accuracy for NN:', s1[1])
-# # SVM
-# m = trainSVM(features, numericalClasses)
-# s2 = testSVM(m, features, numericalClasses)
-# print('Classification accuracy for SVM:',s2)
-# # Random forest (could potentially look at the N features that contribute most to the classification)
-# m = trainForest(features, numericalClasses)
-# s3 = testForest(m, features, numericalClasses)
-# print('Classification accuracy for RF:', s3)
+if testFunctions:
+    # Neural Network
+    m = trainNeuralNetwork(features, categoricalClasses)
+    s1 = testNeuralNetwork(m, features, categoricalClasses)
+    print('Classification accuracy for NN:', s1[1])
+    # SVM
+    m = trainSVM(features, numericalClasses)
+    s2 = testSVM(m, features, numericalClasses)
+    print('Classification accuracy for SVM:',s2)
+    # Random forest (could potentially look at the N features that contribute most to the classification)
+    m = trainForest(features, numericalClasses)
+    s3 = testForest(m, features, numericalClasses)
+    print('Classification accuracy for RF:', s3)
 
+if crossValidation:
+    # Run cross-validation on each model type
+    nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
+    svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
+    rfScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='rf')
 
-# Run cross-validation on each model type
-nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
-svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
-rfScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='rf')
+    nnAvgAcc, nnConfInt = calculateConfidenceInterval(nnScores)
+    svmAvgAcc, svmConfInt = calculateConfidenceInterval(svmScores)
+    rfAvgAcc, rfConfInt = calculateConfidenceInterval(rfScores)
 
-nnAvgAcc = np.mean(nnScores)
-svmAvgAcc = np.mean(svmScores)
-rfAvgAcc = np.mean(rfScores)
+    print("\nSummary of cross-validation results")
+    print("Neural network avg evaluation:")
+    print("               Mean:", nnAvgAcc)
+    print("Confidence Interval:", nnConfInt)
+    print("SVM avg accuracy:")
+    print("               Mean:", svmAvgAcc)
+    print("Confidence Interval:", svmConfInt)
+    print("Random forest avg accuracy:")
+    print("               Mean:", rfAvgAcc)
+    print("Confidence Interval:", rfConfInt)
 
-print("\nSummary of cross-validation results")
-print("Neural network avg accuracy:", nnAvgAcc)
-print("           SVM avg accuracy:", svmAvgAcc)
-print(" Random forest avg accuracy:", rfAvgAcc)
+if saveModel:
+    # Train the neural network
+    neuralNetworkModel = trainNeuralNetwork(features, categoricalClasses, printFeedback=1)
+    # save the neural network
+    saveModel(neuralNetworkModelFn, neuralNetworkModel)
 
-# # Train the neural network
-# neuralNetworkModel = trainNeuralNetwork(features, categoricalClasses, printFeedback=1)
-# # save the neural network
-# saveModel(neuralNetworkModelFn, neuralNetworkModel)
+# Extract the features for non-annotated images
+if extractFeatures:
+    # start by opening the file
+    with gzip.open()
+
