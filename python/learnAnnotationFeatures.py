@@ -178,56 +178,6 @@ def loadModel(filename):
 
 
 #-------------------------------------------------------------------------------------
-# Loading/Saving Non-annotated Data
-#-------------------------------------------------------------------------------------
-def loadNonAnnotatedFeatures(): 
-    """
-    Load the feature vectors of all subjects from the pickle files generated
-    by scaling down the histogram/fhog features from 2193 to 63.
-
-    Inputs:
-    - filename: location of the file
-
-    Returns:
-    - data: the data loaded directly from the pickle file
-    """    
-    # On Bridges for job
-    # pickleFn = '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
-
-    # desktop or laptop or home
-    # pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
-
-    print "pickleFn : ", pickleFn
-    
-    # reading pickle file
-    print "Reading pickle file ...."
-    fid = open(pickleFn,'rb')
-    data = pk.load(open(pickleFn,'rb'))
-    fid.close()
-    print "Done !"
-    return data
-
-
-def loadMetadata(filename):
-    """
-    Load the metadata associated with the pickle file of all the 
-    features (but generated separately?). 
-
-    Inputs:
-    - filename: the name of the metadata file to load
-
-    Returns: the loaded lung dataset metadata
-    """
-    loader = np.load(filename+".npz")
-    md = {
-        "totalSuperPixels": loader['totalSP'],
-        "subjectSuperPixels": loader['subjSP'],
-        "superPixelIndexingStart": loader['indStart'],
-        "superPixelIndexingEnd": loader['indEnd']
-    }
-    return md
-
-#-------------------------------------------------------------------------------------
 # Helper functions to train and test the models
 #-------------------------------------------------------------------------------------
 
@@ -483,9 +433,9 @@ def extractLearnedFeatures(model, newData):
     # https://github.com/fchollet/keras/issues/1641
     # extract layer
     get_last_layer_output = K.function([model.layers[0].input, K.learning_phase()], [model.layers[-4].output])
-    layer_output = get_last_layer_output([X, 0])[0]
+    learnedFeats = get_last_layer_output([newData, 0])[0]
 
-    return layer_output
+    return learnedFeats
 
 
 def calculateConfidenceInterval(accuracies):
@@ -534,18 +484,18 @@ def calculateConfidenceInterval(accuracies):
 # - file to pass through the feature extraction function
 parser = argparse.ArgumentParser()
 parser.add_argument("--test-functions", help="Test the 3 model training functions", 
-                    dest=testFunctions, action='store_true')
+                    dest="testFunctions", action='store_true')
 parser.add_argument("--cross-validate", help="Run cross-validation on all 3 models: neural network, support\nvector machine, and random forest",
-                    dest=crossValidate, action='store_true')
+                    dest="crossValidate", action='store_true')
 parser.add_argument("--save-model", help="Train and save the neural network model",
-                    dest=saveModel, action='store_true')
+                    dest="saveModel", action='store_true')
 parser.add_argument("--extract-features", help="Load a learned neural network and use it to extract learned features for a single subject",
-                    dest=extractFeatures, action='store_true')
+                    dest="extractFeatures", action='store_true')
 parser.set_defaults(testFunctions=False, crossValidation=False, saveModel=False, extractFeatures=False)
 
 args = parser.parse_args()
 
-# filenames
+# FILENAMES
 rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
 # rootPath = "/pylon2/ms4s88p/jms565/projects/COPDGene/"
 annotationDataFn = rootPath + 'data/histFHOG_largeRange_setting1.data.p'
@@ -553,19 +503,24 @@ annotationDataFn = rootPath + 'data/histFHOG_largeRange_setting1.data.p'
 annotationClassesFn = rootPath + 'data/goodPatchClasses.csv'
 neuralNetworkModelFn = rootPath + 'models/keras_neural_network'
 subjFeatureFn = '/home/jenna/Research/10002K_INSP_STD_BWH_COPD_BSpline_Iso1.0mm_SuperVoxel_Param30mm_fHOG_Hist_Features.csv.gz'
+# unannotated data
+featuresFn = rootPath+"unannotated/histFHOG_largeRange_setting1.data.p"
+shelfFn = rootPath+'unannotated/histFHOG_largeRange_setting1.shelve'
+newFeaturesPickleFn = rootPath+'unannotated/learnedFeatures.data.p'
+newFeaturesShelfFn = rootPath+'unannotated/learnedFeatures.shelve'
 
 # DO THIS PART EVERY TIME
 # load the data and the classes for the data
-classes, ids, indices = loadAnnotationClasses(annotationClassesFn)
+classes, annotatedIds, patchIndices = loadAnnotationClasses(annotationClassesFn)
 # features = np.asarray(loadAnnotationData(annotationDataFn))
-features = np.asarray(loadPatchesByIndices(annotationDataFn, indices))
+features = np.asarray(loadPatchesByIndices(annotationDataFn, patchIndices))
 
 # convert the classes to categorical labels
 numericalClasses = np.asarray(convertClassesToCategorial(classes))
 categoricalClasses = np_utils.to_categorical(numericalClasses, len(np.unique(numericalClasses)))
 
 # TESTING FUNCTIONS HERE
-if testFunctions:
+if args.testFunctions:
     # Neural Network
     m = trainNeuralNetwork(features, categoricalClasses)
     s1 = testNeuralNetwork(m, features, categoricalClasses)
@@ -579,7 +534,7 @@ if testFunctions:
     s3 = testForest(m, features, numericalClasses)
     print('Classification accuracy for RF:', s3)
 
-if crossValidation:
+if args.crossValidation:
     # Run cross-validation on each model type
     nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
     svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
@@ -600,19 +555,59 @@ if crossValidation:
     print("               Mean:", rfAvgAcc)
     print("Confidence Interval:", rfConfInt)
 
-if saveModel:
+if args.saveModel:
     # Train the neural network
     neuralNetworkModel = trainNeuralNetwork(features, categoricalClasses, printFeedback=1)
     # save the neural network
     saveModel(neuralNetworkModelFn, neuralNetworkModel)
 
 # Extract the features for non-annotated images
-if extractFeatures:
+if args.extractFeatures:
+    # load the trained neural network
+    m = loadModel(neuralNetworkModelFn)
     # start by opening the feature file
+    with open(featuresFn, 'rb') as f:
+        data = np.asarray(pk.load(f))
 
     # and open the shelve file with the metadata
     shelfData = shelve.open(shelfFn)
     allSubjIds = shelfData['subjList']
+    # we already have the list of subjects who have usable annotation labels
+    # now find the indices of the unannotated subjects who we have features for
+    unannotatedIdxs = [i for i in xrange(len(allSubjIds)) if allSubjIds[i] not in annotatedIds]
+    print("There are",len(unannotatedIdxs),"subjects who have not been annotated.")
+
+    # the metadata needs to be changed if it is a pickle file
+    unannotatedIds = [sid for sid in allSubjIds if sid not in annotatedIds]
+
+    fid = open(newFeaturesShelfFn, 'n')
+    fid['dataConfigDict'] = shelfData['dataConfigDict']
+    fid['subjList'] = unannotatedIds
+    fid['metaVoxelDict'] = list(np.asarray(shelfData['metaVoxelDict'])[unannotatedIdxs]),
+    fid['phenotypeDB_clean'] = shelfData['phenotypeDB_clean'][shelfData['phenotypeDB_clean']['sid'].isin(list(unannotatedIds))],
+    fid['shelveFn'] = shelfData['shelveFn'],
+    fid['imgFeatureFn'] = shelfData['imgFeatureFn'],
+    fid['pickleFn'] = shelfData['pickleFn'],
+    fid['snpCSVDataFn'] = shelfData['snpCSVDataFn']
+    fid.close()
+
+    # close the shelve file
     shelfData.close()
 
+    unannotatedDataFeats = []
+    # for each good subject (by index)
+    for idx in unannotatedIdxs:
+        # give the features to the informed feature extraction function 
+        learnedFeatures = extractLearnedFeatures(m, data[idx]['I'])
+        # put the new features into a dictionary for that subject
+        subjDict = {'I': learnedFeatures}
+        # add that subject's dictionary to the list of unannotated data features
+        unannotatedDataFeats.append(subjDict)
 
+    print("Informed features have been extracted for", len(unannotatedDataFeats), "subjects")
+
+    # save the new data structure as a pickle file
+    fid = open(newFeaturesPickleFn, 'wb')
+    pk.dump(unannotatedDataFeats, fid)
+    fid.close()
+    
