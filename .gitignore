@@ -4,7 +4,6 @@
 *Graphs/
 *.pyc
 *.pdf
-simulatedData/*
 .ipynb_checkpoints/
 annotations/
 figures/

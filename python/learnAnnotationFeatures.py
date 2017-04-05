@@ -28,11 +28,12 @@ from scipy.stats import chi2
 # saving/loading data
 import h5py  # for saving/loading features
 import pickle as pk
+import shelve
 import pandas as pd
 
-#----------------------------------------------------------------------------
-# Loading/Saving Data
-#----------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
+# Loading/Saving Annotation Data
+#------------------------------------------------------------------------------------
 def loadAnnotationData(filename):
     """
     Load the fhog/histogram features extracted from the labeled patches.
@@ -174,6 +175,57 @@ def loadModel(filename):
     model = load_model(filename)
     print("Model loaded!")
     return model
+
+
+#-------------------------------------------------------------------------------------
+# Loading/Saving Non-annotated Data
+#-------------------------------------------------------------------------------------
+def loadNonAnnotatedFeatures(): 
+    """
+    Load the feature vectors of all subjects from the pickle files generated
+    by scaling down the histogram/fhog features from 2193 to 63.
+
+    Inputs:
+    - filename: location of the file
+
+    Returns:
+    - data: the data loaded directly from the pickle file
+    """    
+    # On Bridges for job
+    # pickleFn = '/pylon2/ms4s88p/jms565/COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p'
+
+    # desktop or laptop or home
+    # pickleFn = "COPDGene_pickleFiles/histFHOG_largeRange_setting1.data.p"
+
+    print "pickleFn : ", pickleFn
+    
+    # reading pickle file
+    print "Reading pickle file ...."
+    fid = open(pickleFn,'rb')
+    data = pk.load(open(pickleFn,'rb'))
+    fid.close()
+    print "Done !"
+    return data
+
+
+def loadMetadata(filename):
+    """
+    Load the metadata associated with the pickle file of all the 
+    features (but generated separately?). 
+
+    Inputs:
+    - filename: the name of the metadata file to load
+
+    Returns: the loaded lung dataset metadata
+    """
+    loader = np.load(filename+".npz")
+    md = {
+        "totalSuperPixels": loader['totalSP'],
+        "subjectSuperPixels": loader['subjSP'],
+        "superPixelIndexingStart": loader['indStart'],
+        "superPixelIndexingEnd": loader['indEnd']
+    }
+    return md
 
 #-------------------------------------------------------------------------------------
 # Helper functions to train and test the models
@@ -556,6 +608,11 @@ if saveModel:
 
 # Extract the features for non-annotated images
 if extractFeatures:
-    # start by opening the file
-    with gzip.open()
+    # start by opening the feature file
+
+    # and open the shelve file with the metadata
+    shelfData = shelve.open(shelfFn)
+    allSubjIds = shelfData['subjList']
+    shelfData.close()
+
 
