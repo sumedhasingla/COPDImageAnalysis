@@ -534,6 +534,7 @@ if args.testFunctions:
     s3 = testForest(m, features, numericalClasses)
     print('Classification accuracy for RF:', s3)
 
+# Build and evaluate 3 models
 if args.crossValidation:
     # Run cross-validation on each model type
     nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
@@ -555,6 +556,7 @@ if args.crossValidation:
     print("               Mean:", rfAvgAcc)
     print("Confidence Interval:", rfConfInt)
 
+# Build the neural network and save it
 if args.saveModel:
     # Train the neural network
     neuralNetworkModel = trainNeuralNetwork(features, categoricalClasses, printFeedback=1)
