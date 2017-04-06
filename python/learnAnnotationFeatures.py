@@ -580,7 +580,7 @@ if args.extractFeatures:
     # the metadata needs to be changed if it is a pickle file
     unannotatedIds = [sid for sid in allSubjIds if sid not in annotatedIds]
     # structure of the metadata taken from Kayhan's code
-    fid = open(newFeaturesShelfFn, 'n')
+    fid = shelve.open(newFeaturesShelfFn, 'n')
     fid['dataConfigDict'] = shelfData['dataConfigDict']
     fid['subjList'] = unannotatedIds
     fid['metaVoxelDict'] = list(np.asarray(shelfData['metaVoxelDict'])[unannotatedIdxs]),
