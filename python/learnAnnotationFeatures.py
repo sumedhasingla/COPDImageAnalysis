@@ -195,7 +195,7 @@ def trainNeuralNetwork(X_train, Y_train, printFeedback=0):
     """
     # set up variables for the model
     batch_size = 100 # since the dataset has ~ 1530 points, make a batch ~ 100
-    nb_classes = 11 # len(np.unique(Y_train))
+    nb_classes = 12
     nb_epoch = 20 # supposed to be 20, according to past work
 
     print(X_train.shape[0], 'training data samples')
