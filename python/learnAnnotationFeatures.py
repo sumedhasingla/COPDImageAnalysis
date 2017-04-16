@@ -195,7 +195,7 @@ def trainNeuralNetwork(X_train, Y_train, printFeedback=0):
     """
     # set up variables for the model
     batch_size = 100 # since the dataset has ~ 1530 points, make a batch ~ 100
-    nb_classes = 12
+    nb_classes = 11 # len(np.unique(Y_train))
     nb_epoch = 20 # supposed to be 20, according to past work
 
     print(X_train.shape[0], 'training data samples')
@@ -499,8 +499,8 @@ args = parser.parse_args()
 rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
 # rootPath = "/pylon2/ms4s88p/jms565/projects/COPDGene/"
 annotationDataFn = rootPath + 'data/histFHOG_largeRange_setting1.data.p'
-# annotationClassesFn = rootPath + 'data/annotationClasses.csv'
-annotationClassesFn = rootPath + 'data/goodPatchClasses.csv'
+annotationClassesFn = rootPath + 'data/annotationClasses.csv'
+# annotationClassesFn = rootPath + 'data/goodPatchClasses.csv'
 neuralNetworkModelFn = rootPath + 'models/keras_neural_network'
 subjFeatureFn = '/home/jenna/Research/10002K_INSP_STD_BWH_COPD_BSpline_Iso1.0mm_SuperVoxel_Param30mm_fHOG_Hist_Features.csv.gz'
 # unannotated data
@@ -512,8 +512,8 @@ newFeaturesShelfFn = rootPath+'unannotated/learnedFeatures.shelve'
 # DO THIS PART EVERY TIME
 # load the data and the classes for the data
 classes, annotatedIds, patchIndices = loadAnnotationClasses(annotationClassesFn)
-# features = np.asarray(loadAnnotationData(annotationDataFn))
-features = np.asarray(loadPatchesByIndices(annotationDataFn, patchIndices))
+features = np.asarray(loadAnnotationData(annotationDataFn))
+# features = np.asarray(loadPatchesByIndices(annotationDataFn, patchIndices))
 
 # convert the classes to categorical labels
 numericalClasses = np.asarray(convertClassesToCategorial(classes))
@@ -535,7 +535,7 @@ if args.testFunctions:
     print('Classification accuracy for RF:', s3)
 
 # Build and evaluate 3 models
-if args.crossValidation:
+if args.crossValidate:
     # Run cross-validation on each model type
     nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
     svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
@@ -567,11 +567,11 @@ if args.saveModel:
 if args.extractFeatures:
     # load the trained neural network
     m = loadModel(neuralNetworkModelFn)
-    # start by opening the feature file
+    # start by opening the feature file for the histogram/fhog features for all subjects
     with open(featuresFn, 'rb') as f:
         data = np.asarray(pk.load(f))
 
-    # and open the shelve file with the metadata
+    # and open the shelve file with the metadata to get the list of all subject ids
     shelfData = shelve.open(shelfFn)
     allSubjIds = shelfData['subjList']
     # we already have the list of subjects who have usable annotation labels
