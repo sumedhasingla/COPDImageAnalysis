@@ -7,6 +7,13 @@ import mmd
 from sklearn import cross_validation as cv
 from sklearn.kernel_ridge import KernelRidge
 
+# imports for KL and HE
+# Dougal code imports
+from skl_groups.features import Features
+from sklearn.pipeline import Pipeline
+from skl_groups.divergences import KNNDivergenceEstimator
+from skl_groups.kernels import PairwisePicker, Symmetrize, RBFize, ProjectPSD
+
 # imports for file handling
 import pickle as pk
 
@@ -50,7 +57,7 @@ def saveSimilarityKernel(fn, sims):
     Returns: nothing
     """
     np.savez(fn, similarities=sims)
-    print "Saved the similarities to a file."
+    print("Saved the similarities to a file.")
 
 
 def loadSimilarityKernel(fn):
@@ -64,7 +71,7 @@ def loadSimilarityKernel(fn):
     - loadedSims: similarity matrix
     """
     loader = np.load(fn+".npz")
-    print "Similarities loaded!"
+    print("Similarities loaded!")
     return loader['similarities']
 
 
@@ -92,7 +99,7 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
     """
 
     # pass the features and labels to scikit-learn Features
-    feats = Features(patients) # directly from Dougal
+    feats = Features(subjects) # directly from Dougal
 
     # specify the divergence to use
     if div == 'KL':
@@ -102,7 +109,7 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
         #          rbf and projectPSD help ensure the data is separable?
         distEstModel = Pipeline([ # div_funcs=['kl'], rewrite this to actually use PairwisePicker correctly next time
             ('divs', KNNDivergenceEstimator(div_funcs=['kl'], Ks=[numNeighbors], n_jobs=-1, version='fast')),
-            ('pick', PairwisePicker((0, 0)))
+            ('pick', PairwisePicker((0, 0))),
             ('symmetrize', Symmetrize())
             # ('rbf', RBFize(gamma=1, scale_by_median=True)),
             # ('project', ProjectPSD())
@@ -113,7 +120,7 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
         # Great, we have the similarities and they're symmetric
         # Now RBFize them, but do the scale by median by hand
         rbf = RBFize(gamma=1, scale_by_median=False)
-        simsMedian = np.media(sims[np.triu_indices_from(sims)])
+        simsMedian = np.median(sims[np.triu_indices_from(sims)])
         medianScaledSims = sims/simsMedian
         rbfedSims = rbf.fit_transform(medianScaledSims)
 
@@ -141,9 +148,10 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
         # Great, we have the similarities and they're symmetric
         # Now RBFize them, but do the scale by median by hand
         rbf = RBFize(gamma=1, scale_by_median=False)
-        simsMedian = np.media(sims[np.triu_indices_from(sims)])
-        medianScaledSims = sims/simsMedian
-        rbfedSims = rbf.fit_transform(medianScaledSims)
+        simsMedian = np.median(sims[np.triu_indices_from(sims)])
+        # medianScaledSims = sims/simsMedian
+        # rbfedSims = rbf.fit_transform(medianScaledSims)
+        rbfedSims = rbf.fit_transform(sims)
 
         # Final step in building the kernel: project the rbf'ed similarities
         #   onto a positive semi-definite space
@@ -171,6 +179,10 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
         mmdMedianSquaredDist = np.median(mmds[np.triu_indices_from(mmds, k=numNeighbors)])
         kernel = np.exp(np.multiply(mmds, -1/mmdMedianSquaredDist))
 
+    else:
+        print("Error: divergence entered is not valid.")
+        return -1
+
     return kernel
 
 
@@ -186,7 +198,8 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
 # - number of neighbors argument
 
 # specify file paths
-rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
+# rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
+rootPath = '/home/jms565/Research/COPDImageAnalysis/annotations/'
 featureFn = rootPath + 'unannotated/learnedFeatures.data.p'
 klKernelFn = rootPath + 'unannotated/kernel-kl'
 heKernelFn = rootPath + 'unannotated/kernel-he'
@@ -195,14 +208,25 @@ mmdKernelFn = rootPath + 'unannotated/kernel-mmd'
 # load the data
 features = loadFeatures(featureFn)
 
-# run the kernel computation
-k = computeSubjSubjKernel(features)
+# # run the kernel computation
+# k = computeSubjSubjKernel(features, div='KL')
+# # save the kernel
+# saveSimilarityKernel(klKernelFn, k)
+# # Test: load the kernel to check it
+# loadedK = loadSimilarityKernel(klKernelFn)
+# print(k == loadedK)
 
-# save the kernel
-saveSimilarityKernel(klKernelFn, k)
 
-# Test: load the kernel to check it
-loadedK = loadSimilarityKernel(klKernelFn)
-
-print((k == loadedK).all())
+# # run the kernel computation
+# k = computeSubjSubjKernel(features, div='HE')
+# # save the kernel
+# saveSimilarityKernel(heKernelFn, k)
+# # Test: load the kernel to check it
+# loadedK = loadSimilarityKernel(heKernelFn)
+# print((k == loadedK).all())
 # probably should assert symmetricity too?
+
+k = computeSubjSubjKernel(features, div = "MMD")
+saveSimilarityKernel(mmdKernelFn, k)
+loadedK = loadSimilarityKernel(mmdKernelFn)
+print((k==loadedK).all())
