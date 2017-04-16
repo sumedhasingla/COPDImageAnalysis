@@ -225,22 +225,6 @@ def computePairwiseSimilarities2(patients, y):
     sims = distEstModel.fit_transform(feats)
     return sims
 
-def computePairwiseSimilaritiesMMD(patients, y):
-    """
-    Compute the pairwise similarity between bags using Dougal's MMD module
-
-    Inputs:
-    - patients: the collection of patient features
-    - y: labels (number of abnormal nodes) for each subject. May not be used.
-
-    Returns:
-    - sims: the mmd pairwise similarities between each patient
-    * Note: sims is a NxN symmetric matrix, where N is the number of subjects
-    """
-    import mmd
-
-    feats = 
-
 #--------------------------------------------------------------------------
 # Imported Functions from Previous Work (WARNING: MIGHT BE MODIFIED)
 #--------------------------------------------------------------------------
@@ -868,21 +852,21 @@ elif args.runtype == 5:
 elif args.runtype == 6:
     # save the subject
     N = 2000
-    # patientsFN = "./simulatedData/simulatedSubjects"
-    patientsFN = "/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects"
+    patientsFN = "/home/jms565/Research/old-lung-image-analysis/code/simulatedData/simulatedSubjects"
+    # patientsFN = "/pylon1/ms4s88p/jms565/simulatedData/simulatedSubjects"
     loadedIds, numAbnormalNodes, loadedSubjs = loadSimFeats(patientsFN)
-    # imgRoot = "./simulatedData/simulatedImages/S"
-    imgRoot = "/pylon1/ms4s88p/jms565/simulatedData/simulatedImages/S"
+    imgRoot = "/home/jms565/Research/old-lung-image-analysis/code/simulatedData/simulatedImages/S"
+    # imgRoot = "/pylon1/ms4s88p/jms565/simulatedData/simulatedImages/S"
     feats = [loadSimImg(imgRoot+str(i).zfill(4)) for i in xrange(N)]
 
-    # Compute the pairwise similarity between patients using Dougal code
-    print "Calculating similarities..."
-    sims = computePairwiseSimilarities2(feats, numAbnormalNodes)
-    print "Similarities calculated!"
-    # save the similarities
-    kernelFN = os.environ['LOCAL']+"kernel-2000-sym-pix-v2"
-    saveSimilarities(kernelFN, sims)
-    # load the similarities to check
-    loadedK = loadSimilarities(kernelFN)
-    # check the similarities
-    print (loadedK==sims).all()
+    # # Compute the pairwise similarity between patients using Dougal code
+    # print "Calculating similarities..."
+    # sims = computePairwiseSimilarities2(feats, numAbnormalNodes)
+    # print "Similarities calculated!"
+    # # save the similarities
+    # kernelFN = os.environ['LOCAL']+"kernel-2000-sym-pix-v2"
+    # saveSimilarities(kernelFN, sims)
+    # # load the similarities to check
+    # loadedK = loadSimilarities(kernelFN)
+    # # check the similarities
+    # print (loadedK==sims).all()
