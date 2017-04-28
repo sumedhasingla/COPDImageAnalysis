@@ -75,6 +75,28 @@ def loadSimilarityKernel(fn):
     return loader['similarities']
 
 
+def loadFEV1(fn):
+    """
+    Load the list of subject ids and FEV1 values from the shelf file
+    
+    Inputs:
+    - fn: filename of the shelf file, ending in .shelve
+    
+    Returns:
+    - subjectIds: list of subject ids
+    - fev1: list of FEV1 values
+    """
+    import shelve
+
+    shelfData = shelve.open(fn)
+    print(shelfData.keys())
+    subjectIds = shelfData['subjList']
+    df = shelfData['phenotypeDB_clean'][0]
+    shelfData.close()
+    fev1 = df['FEV1pp_utah']
+    
+    return subjectIds, fev1
+
 #---------------------------------------------------------------------------------------------
 # Functions for doing stuff
 #---------------------------------------------------------------------------------------------
@@ -175,6 +197,9 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
         mmds, mmkDiagonals = mmd.rbf_mmd(feats, gammas=firstGamma, squared=True, ret_X_diag=True)
 
         # now let's turn the squared MMD distances into a kernel
+        # symmetrize it
+        sym = Symmetrize()
+        mmds = sym.fit_transform(mmds)
         # get the median squared MMD distance
         mmdMedianSquaredDist = np.median(mmds[np.triu_indices_from(mmds, k=numNeighbors)])
         kernel = np.exp(np.multiply(mmds, -1/mmdMedianSquaredDist))
@@ -198,32 +223,39 @@ def computeSubjSubjKernel(subjects, div='KL', numNeighbors=3):
 # - number of neighbors argument
 
 # specify file paths
-# rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
-rootPath = '/home/jms565/Research/COPDImageAnalysis/annotations/'
-featureFn = rootPath + 'unannotated/learnedFeatures.data.p'
-klKernelFn = rootPath + 'unannotated/kernel-kl'
-heKernelFn = rootPath + 'unannotated/kernel-he'
-mmdKernelFn = rootPath + 'unannotated/kernel-mmd'
+rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
+# rootPath = '/home/jms565/Research/COPDImageAnalysis/annotations/'
+featureFn = rootPath + 'unannotated/learnedFeatures_3layers.data.p'
+klKernelFn = rootPath + 'unannotated/kernel-kl-3layers-noNans'
+heKernelFn = rootPath + 'unannotated/kernel-he-3layers-noNans'
+mmdKernelFn = rootPath + 'unannotated/kernel-mmd-3layers-noNans'
 
 # load the data
 features = loadFeatures(featureFn)
 
-# # run the kernel computation
-# k = computeSubjSubjKernel(features, div='KL')
-# # save the kernel
-# saveSimilarityKernel(klKernelFn, k)
-# # Test: load the kernel to check it
-# loadedK = loadSimilarityKernel(klKernelFn)
-# print(k == loadedK)
+# There's a problem with the data. Some of the FEV1 values are NAN.
+subjIds, FEV1s = loadFEV1(rootPath+"unannotated/learnedFeatures_3layers.shelve")
+FEV1s = np.asarray(FEV1s)
+nans = np.argwhere(np.isnan(FEV1s))[:,0]
+print(len(features))
+features = [features[i] for i in xrange(len(FEV1s)) if i not in nans]
+print(len(features))
 
+# run the kernel computation
+k = computeSubjSubjKernel(features, div='KL')
+# save the kernel
+saveSimilarityKernel(klKernelFn, k)
+# Test: load the kernel to check it
+loadedK = loadSimilarityKernel(klKernelFn)
+print((k == loadedK).all())
 
-# # run the kernel computation
-# k = computeSubjSubjKernel(features, div='HE')
-# # save the kernel
-# saveSimilarityKernel(heKernelFn, k)
-# # Test: load the kernel to check it
-# loadedK = loadSimilarityKernel(heKernelFn)
-# print((k == loadedK).all())
+# run the kernel computation
+k = computeSubjSubjKernel(features, div='HE')
+# save the kernel
+saveSimilarityKernel(heKernelFn, k)
+# Test: load the kernel to check it
+loadedK = loadSimilarityKernel(heKernelFn)
+print((k == loadedK).all())
 # probably should assert symmetricity too?
 
 k = computeSubjSubjKernel(features, div = "MMD")

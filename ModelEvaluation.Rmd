@@ -1,0 +1,67 @@
+---
+title: "ProjectsFigures"
+author: "Jenna Schabdach"
+date: "April 19, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Look at ggplot and plyer
+```{r}
+
+nnScores = c( 0.54838711,  0.51612902,  0.64516127,  0.67741936,  0.61290324,
+             0.58064514,  0.51612902,  0.58064514,  0.67741936,  0.64516127,
+             0.67741936,  0.7096774 ,  0.45161289,  0.61290324,  0.51612902,
+             0.3548387 ,  0.51612902,  0.58064514,  0.54838711,  0.77419353,
+             0.45161289,  0.54838711,  0.48387095,  0.64516127,  0.64516127,
+             0.54838711,  0.5       ,  0.60000002,  0.60000002,  0.43333334,
+             0.66666669,  0.66666669,  0.46666667,  0.76666665,  0.80000001,
+             0.66666669,  0.43333334,  0.46666667,  0.69999999,  0.53333336,
+             0.76666665,  0.60000002,  0.66666669,  0.5       ,  0.53333336,
+             0.5       ,  0.53333336,  0.53333336,  0.60000002,  0.76666665)
+svmScores = c(0.35483871,  0.32258065,  0.32258065,  0.32258065,  0.4516129 ,
+             0.4516129 ,  0.35483871,  0.41935484,  0.41935484,  0.41935484,
+             0.22580645,  0.41935484,  0.29032258,  0.41935484,  0.41935484,
+             0.32258065,  0.32258065,  0.38709677,  0.5483871 ,  0.41935484,
+             0.32258065,  0.32258065,  0.38709677,  0.48387097,  0.35483871,
+             0.29032258,  0.23333333,  0.46666667,  0.3       ,  0.3       ,
+             0.26666667,  0.36666667,  0.13333333,  0.43333333,  0.5       ,
+             0.5       ,  0.26666667,  0.26666667,  0.36666667,  0.46666667,
+             0.56666667,  0.33333333,  0.53333333,  0.3       ,  0.23333333,
+             0.33333333,  0.36666667,  0.46666667,  0.36666667,  0.6)
+rfScores = c(0.61290323,  0.61290323,  0.64516129,  0.67741935,  0.51612903,
+            0.5483871 ,  0.67741935,  0.5483871 ,  0.61290323,  0.77419355,
+            0.61290323,  0.61290323,  0.58064516,  0.58064516,  0.58064516,
+            0.4516129 ,  0.48387097,  0.83870968,  0.5483871 ,  0.70967742,
+            0.64516129,  0.61290323,  0.64516129,  0.58064516,  0.58064516,
+            0.48387097,  0.63333333,  0.66666667,  0.6       ,  0.53333333,
+            0.76666667,  0.73333333,  0.6       ,  0.63333333,  0.7       ,
+            0.63333333,  0.5       ,  0.6       ,  0.73333333,  0.63333333,
+            0.66666667,  0.43333333,  0.76666667,  0.63333333,  0.46666667,
+            0.53333333,  0.6       ,  0.63333333,  0.6       ,  0.7)
+
+scoresAll = c(nnScores, rfScores, svmScores)
+
+modelTypes = c("Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Neural Network", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "Random Forest", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM", "SVM")
+
+length(modelTypes)
+```
+
+```{r}
+boxplot(formula = scoresAll ~ modelTypes)
+modelTypesNum = c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 )
+
+title(main="Model Accuracies of 50-Fold Cross Validation", ylab="Accuracies (%)")
+jitteredModels = jitter(modelTypesNum)
+points(jitteredModels[101:150], scoresAll[101:150], col='goldenrod')
+points(jitteredModels[51:100], scoresAll[51:100], col='blue')
+points(jitteredModels[1:50], scoresAll[1:50], col='firebrick')
+```
+
+```{r}
+# Compare the data
+nnRfTtest = t.test(nnScores, rfScores, paired=TRUE, conf.level = 0.95) # default alternative hypothesis = two.sided
+nnSvmTtest = t.test(nnScores, svmScores, paired = TRUE, conf.level = 0.95)
+rfSvmTttest = t.test(svmScores, rfScores, paired = TRUE, conf.level = 0.95)

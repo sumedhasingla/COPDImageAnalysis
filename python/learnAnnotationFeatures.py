@@ -22,6 +22,13 @@ from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 
+# AUROC
+from scipy import interp
+from sklearn import svm, datasets
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+
 # calculating the confidence interval
 from scipy.stats import chi2
 
@@ -202,21 +209,24 @@ def trainNeuralNetwork(X_train, Y_train, printFeedback=0):
 
     # set up the structure of the neural network
     model = Sequential()
-    model.add(Dense(512, input_shape=(X_train.shape[1],)))
+    model.add(Dense(63, input_shape=(X_train.shape[1],)))
     model.add(Activation('relu'))
     model.add(Dropout(0.1))
-    model.add(Dense(512))
+    model.add(Dense(63))
     model.add(Activation('relu'))
     model.add(Dropout(0.1))
-    model.add(Dense(512))
+    model.add(Dense(63))
     model.add(Activation('relu'))
     model.add(Dropout(0.1))
-    model.add(Dense(512))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.1))
-    model.add(Dense(128))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.1))
+    # model.add(Dense(512))
+    # model.add(Activation('relu'))
+    # model.add(Dropout(0.1))
+    # model.add(Dense(512))
+    # model.add(Activation('relu'))
+    # model.add(Dropout(0.1))
+    # model.add(Dense(128))
+    # model.add(Activation('relu'))
+    # model.add(Dropout(0.1))
     model.add(Dense(20)) # this is the layer I want to get features from (-4)
     model.add(Activation('relu'))
     model.add(Dense(output_dim=nb_classes))
@@ -257,6 +267,28 @@ def testNeuralNetwork(model, X_test, Y_test):
     return score
 
 
+def predictNeuralNetwork(model, X_test):
+    """
+    Predict the y values for the test set using a previously trained 
+    neural network model.
+
+    Inputs:
+    - model: previously trained model
+    - X_test: test data (fhog/histogram features)
+    - Y_test: class for each point of the test data
+
+    Returns:
+    - accuracy: the accuracy of the model
+
+    Effects:
+    - prints the accuracy of the model in classifying the test data
+    """
+    y_hats = model.predict(X_test)
+    # print('Test data score:', score[0])
+    # print('Test data accuracy:', score[1])
+    return y_hats #np.argmax(y_hats, axis=1)
+
+
 def trainSVM(X_train, Y_train):
     """
     Train a SVM to classify the patch features.
@@ -269,7 +301,7 @@ def trainSVM(X_train, Y_train):
     - model: trained model
     """
     # make the model object
-    model = SVC() 
+    model = SVC(probability=True) 
     model.fit(X_train, Y_train)
     print(model.score(X_train, Y_train ))
 
@@ -293,6 +325,22 @@ def testSVM(model, X_test, Y_test):
     """
     score = model.score(X_test, Y_test)
     return score
+
+
+def predictSVM(model, X_test):
+    """
+    Test a previously trained SVM.
+
+    Inputs:
+    - model: the previously trained model
+    - X_test: the test data
+
+    Returns:
+    - y_hats: predictions for the y corresponding to X_test
+    """
+    y_hats = model.predict_proba(X_test)
+    print(y_hats.shape)
+    return y_hats
 
 
 def trainForest(X_train, Y_train):
@@ -331,6 +379,23 @@ def testForest(model, X_test, Y_test):
     score = model.score(X_test, Y_test)
 
     return score
+
+
+def predictForest(model, X_test):
+    """
+    See if a previously trained random forest classifier can identify
+    patch labels for test data.
+
+    Inputs:
+    - model: the previously trained model
+    - X_test: test data
+
+    Returns:
+    - model: a trained model
+    """
+    y_hats = model.predict_proba(X_test)
+    print(y_hats.shape)
+    return y_hats
 
 
 def convertClassesToCategorial(y):
@@ -417,6 +482,162 @@ def runCrossValidation(data, classes, nFolds=10, modelType='nn'):
     return scores
 
 
+def runCrossValidationAll(data, catClasses, numClasses, nFolds=10):
+    """
+    Run n-fold cross validation to evaluate the average accuracy of the model.
+
+    Inputs:
+    - data: all data X
+    - catClasses: all classes y (categorical)
+    - numClasses: all classes y (numerical)
+    - nFolds: the number of folds for the cross-validation
+
+    Effects:
+    - prints the accuracy of each fold of cross-validation and the average accuracy
+
+    Returns:
+    - scores: score and accuracy of each fold
+    """
+    # make a cross-validation object
+    cv = KFold(n=len(classes), n_folds=nFolds, shuffle=True, random_state=0)
+
+    scoresNN = []
+    scoresSVM = []
+    scoresRF = []
+
+    # AUROC
+    nClasses = 12
+    nn_mean_tpr = 0.0
+    svm_mean_tpr = 0.0
+    rf_mean_tpr = 0.0
+    mean_fpr = np.linspace(0, 1, 100)
+
+    # iterate through the different folds
+    for i, (trainIdx, testIdx) in enumerate(cv):
+        # train the model on the training data
+        m1 = trainNeuralNetwork(data[trainIdx], catClasses[trainIdx])
+        # test the model on the test data
+        # scoresNN.append(testNeuralNetwork(m1, data[testIdx], catClasses[testIdx]))
+        nnYhat = predictNeuralNetwork(m1, data[testIdx])
+        # "threshold" data
+        nnYhatThresholded = np.zeros_like(nnYhat)
+        nnYhatThresholded[np.arange(len(nnYhat)), nnYhat.argmax(1)] = 1
+        # testing the AUROC stuff
+        nn_class_mean_tprs = 0.0
+        # iterate through all of the classes
+        for c in xrange(nClasses):
+            # print(catClasses[testIdx].shape)
+            # print(nnYhat.shape)
+            # print(nnYhat[0,:])
+            fpr, tpr, thresholds = roc_curve(catClasses[testIdx][:, c], nnYhatThresholded[:, c])
+            if np.isnan(tpr).any():
+                tpr = np.array([0.0, 1.0])
+                fpr = np.array([0.0, 1.0])
+            # we want to get the average fpr/tpr rate for all of the classes
+            classCount = np.count_nonzero(catClasses[testIdx][:, c])
+            nn_class_mean_tprs += classCount*interp(mean_fpr, fpr, tpr)/len(testIdx)
+            # print(nn_class_mean_tprs)
+            nn_class_mean_tprs[0] = 0.0
+
+        nn_mean_tpr += nn_class_mean_tprs
+
+        # train the model on the training data
+        print(trainIdx.shape)
+        m2 = trainSVM(data[trainIdx], numClasses[trainIdx])
+        # # test the model on the test data
+        # scoresSVM.append(testSVM(m2, data[testIdx], numClasses[testIdx]))
+        svmYhat = predictSVM(m2, data[testIdx])
+
+        # "threshold" data
+        svmYhatThresholded = np.zeros_like(svmYhat)
+        svmYhatThresholded[np.arange(len(svmYhat)), svmYhat.argmax(1)] = 1
+        # testing the AUROC stuff
+        svm_class_mean_tprs = 0.0
+        # iterate through all of the classes
+        for c in xrange(nClasses):
+            # print(catClasses[testIdx].shape)
+            # print(nnYhat.shape)
+            # print(nnYhat[0,:])
+            fpr, tpr, thresholds = roc_curve(catClasses[testIdx][:, c], svmYhatThresholded[:, c])
+            if np.isnan(tpr).any():
+                tpr = np.array([0.0, 1.0])
+                fpr = np.array([0.0, 1.0])
+            # we want to get the average fpr/tpr rate for all of the classes
+            classCount = np.count_nonzero(catClasses[testIdx][:, c])
+            svm_class_mean_tprs += classCount*interp(mean_fpr, fpr, tpr)/len(testIdx)
+            # print(nn_class_mean_tprs)
+            svm_class_mean_tprs[0] = 0.0
+
+        svm_mean_tpr += svm_class_mean_tprs
+
+
+        # train the model on the training data
+        m3 = trainForest(data[trainIdx], numClasses[trainIdx])
+        # # test the model on the test data
+        # scoresRF.append(testForest(m3, data[testIdx], numClasses[testIdx]))
+        rfYhat = predictForest(m3, data[testIdx])
+
+        # "threshold" data
+        rfYhatThresholded = np.zeros_like(rfYhat)
+        rfYhatThresholded[np.arange(len(rfYhat)), rfYhat.argmax(1)] = 1
+        # testing the AUROC stuff
+        rf_class_mean_tprs = 0.0
+        # iterate through all of the classes
+        for c in xrange(nClasses):
+            # print(catClasses[testIdx].shape)
+            # print(nnYhat.shape)
+            # print(nnYhat[0,:])
+            fpr, tpr, thresholds = roc_curve(catClasses[testIdx][:, c], rfYhatThresholded[:, c])
+            if np.isnan(tpr).any():
+                tpr = np.array([0.0, 1.0])
+                fpr = np.array([0.0, 1.0])
+            # we want to get the average fpr/tpr rate for all of the classes
+            classCount = np.count_nonzero(catClasses[testIdx][:, c])
+            rf_class_mean_tprs += classCount*interp(mean_fpr, fpr, tpr)/len(testIdx)
+            # print(nn_class_mean_tprs)
+            rf_class_mean_tprs[0] = 0.0
+
+        rf_mean_tpr += rf_class_mean_tprs
+
+    # scoresNN = np.asarray(scoresNN)[:,1]
+    # scoresSVM = np.asarray(scoresSVM)
+    # scoresRF = np.asarray(scoresRF)
+    # if modelType == 'nn':
+    #     print('\nAverage accuracy of the model:', np.mean(scores[:, 1]))
+    # else:
+    #     print('\nAverage accuracy of the model:', np.mean(scores))
+
+    nn_mean_tpr /= nFolds
+    nn_mean_tpr[-1] = 1.0
+    nn_mean_auc = auc(mean_fpr, nn_mean_tpr)
+    svm_mean_tpr /= nFolds
+    svm_mean_tpr[-1] = 1.0
+    svm_mean_auc = auc(mean_fpr, svm_mean_tpr)
+    rf_mean_tpr /= nFolds
+    rf_mean_tpr[-1] = 1.0
+    rf_mean_auc = auc(mean_fpr, rf_mean_tpr)
+
+    # plot the ROC curve
+    plt.plot(mean_fpr, nn_mean_tpr, color='b', label='Mean ROC for Neural Network (area = %0.2f)' % nn_mean_auc)
+    plt.plot(mean_fpr, svm_mean_tpr, color='r', linestyle="-.", lw='2', label='Mean ROC for SVM (area = %0.2f)' % svm_mean_auc)
+    plt.plot(mean_fpr, rf_mean_tpr, color='g', linestyle="--", label='Mean ROC for Random Forest (area = %0.2f)' % rf_mean_auc)
+
+    # plot for random chance
+    plt.plot([0, 1], [0, 1], linestyle=':', color='k', label='Luck')
+
+    # Taken from example, setting up plot to look pretty
+    plt.xlim([-0.05, 1.05])
+    plt.ylim([-0.05, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curves for Label Classifiers')
+    plt.legend(loc="lower right")
+
+    plt.show()
+
+    # return scoresNN, scoresSVM, scoresRF
+
+
 def extractLearnedFeatures(model, newData):
     """
     Using the previously trained model, extract a learned set of features for the new
@@ -493,21 +714,19 @@ parser.add_argument("--extract-features", help="Load a learned neural network an
                     dest="extractFeatures", action='store_true')
 parser.set_defaults(testFunctions=False, crossValidation=False, saveModel=False, extractFeatures=False)
 
-args = parser.parse_args()
-
 # FILENAMES
 rootPath = '/home/jenna/Research/COPDImageAnalysis/annotations/'
 # rootPath = "/pylon2/ms4s88p/jms565/projects/COPDGene/"
 annotationDataFn = rootPath + 'data/histFHOG_largeRange_setting1.data.p'
 annotationClassesFn = rootPath + 'data/annotationClasses.csv'
 # annotationClassesFn = rootPath + 'data/goodPatchClasses.csv'
-neuralNetworkModelFn = rootPath + 'models/keras_neural_network'
+neuralNetworkModelFn = rootPath + 'models/keras_neural_network_3layers'
 subjFeatureFn = '/home/jenna/Research/10002K_INSP_STD_BWH_COPD_BSpline_Iso1.0mm_SuperVoxel_Param30mm_fHOG_Hist_Features.csv.gz'
 # unannotated data
 featuresFn = rootPath+"unannotated/histFHOG_largeRange_setting1.data.p"
 shelfFn = rootPath+'unannotated/histFHOG_largeRange_setting1.shelve'
-newFeaturesPickleFn = rootPath+'unannotated/learnedFeatures.data.p'
-newFeaturesShelfFn = rootPath+'unannotated/learnedFeatures.shelve'
+newFeaturesPickleFn = rootPath+'unannotated/learnedFeatures_3layers.data.p'
+newFeaturesShelfFn = rootPath+'unannotated/learnedFeatures_3layers.shelve'
 
 # DO THIS PART EVERY TIME
 # load the data and the classes for the data
@@ -518,6 +737,8 @@ features = np.asarray(loadAnnotationData(annotationDataFn))
 # convert the classes to categorical labels
 numericalClasses = np.asarray(convertClassesToCategorial(classes))
 categoricalClasses = np_utils.to_categorical(numericalClasses, len(np.unique(numericalClasses)))
+
+args = parser.parse_args()
 
 # TESTING FUNCTIONS HERE
 if args.testFunctions:
@@ -537,24 +758,27 @@ if args.testFunctions:
 # Build and evaluate 3 models
 if args.crossValidate:
     # Run cross-validation on each model type
-    nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
-    svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
-    rfScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='rf')
+    # nnScores = runCrossValidation(features, categoricalClasses, nFolds=50, modelType='nn')[:, 1]
+    # svmScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='svm')
+    # rfScores = runCrossValidation(features, numericalClasses, nFolds=50, modelType='rf')
 
-    nnAvgAcc, nnConfInt = calculateConfidenceInterval(nnScores)
-    svmAvgAcc, svmConfInt = calculateConfidenceInterval(svmScores)
-    rfAvgAcc, rfConfInt = calculateConfidenceInterval(rfScores)
+    # nnScores, svmScores, rfScores = runCrossValidationAll(features, categoricalClasses, numericalClasses, nFolds=10)
+    runCrossValidationAll(features, categoricalClasses, numericalClasses, nFolds=10)
 
-    print("\nSummary of cross-validation results")
-    print("Neural network avg evaluation:")
-    print("               Mean:", nnAvgAcc)
-    print("Confidence Interval:", nnConfInt)
-    print("SVM avg accuracy:")
-    print("               Mean:", svmAvgAcc)
-    print("Confidence Interval:", svmConfInt)
-    print("Random forest avg accuracy:")
-    print("               Mean:", rfAvgAcc)
-    print("Confidence Interval:", rfConfInt)
+    # nnAvgAcc, nnConfInt = calculateConfidenceInterval(nnScores)
+    # svmAvgAcc, svmConfInt = calculateConfidenceInterval(svmScores)
+    # rfAvgAcc, rfConfInt = calculateConfidenceInterval(rfScores)
+
+    # print("\nSummary of cross-validation results")
+    # print("Neural network avg evaluation:")
+    # print("               Mean:", nnAvgAcc)
+    # print("Confidence Interval:", nnConfInt)
+    # print("SVM avg accuracy:")
+    # print("               Mean:", svmAvgAcc)
+    # print("Confidence Interval:", svmConfInt)
+    # print("Random forest avg accuracy:")
+    # print("               Mean:", rfAvgAcc)
+    # print("Confidence Interval:", rfConfInt)
 
 # Build the neural network and save it
 if args.saveModel:
