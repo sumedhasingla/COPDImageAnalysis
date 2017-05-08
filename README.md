@@ -20,7 +20,7 @@ Now you have a set of pickle files with all of the extracted image features for 
 
 Pipeline Description (Annotation Data)
 ======================================
-Assumption: the labels from the annotation data are already converted into histogram and fhog features with a feature vector length of 63 for each patch, and the features are stored in a .hdf5 file
+Assumption: the labels from the annotation data are already converted into histogram and fhog features with a feature vector length of 63 for each patch, and the features are stored in a pickle file
 
 Starting with the features, use python/learnAnnotationFeatures.py. This file can be used to 
 - Build and evaluate a neural network, a SVM, and a random forest for classifying the annotated patches. The evaluation is done using N-fold cross validation on the patch features of the annotated data. To test the functions that train and test these three models, use the command `python python/learnAnnotationFeatures.py --test-functions`. To cross-validate these three models in order to evaluate their performance, use the command `python python/learnAnnotationFeatures.py --cross-validate`.
@@ -29,10 +29,10 @@ Starting with the features, use python/learnAnnotationFeatures.py. This file can
 
 * Note: other arguments can easily be added to this file. I have made some notes of potential arguments that could make life easier if this code is used for another set of files. I did not add them myself due to time constraints.
 
-After the learned features are extracted, use XXXXXXXXX.py to
+After the learned features are extracted, use python/buildSubjSubjSimGraph.py to
 - Build the KNN graph and extract the divergence between every K-nearest subjects
   - Possible divergences include Kullback-Leibler (KL), Hellinger (HE), and Mean Maximum Discrepancy (MMD)
-- Symmetrize the divergences, project them onto a positive semidefinite space, and something else to get a kernel
+- Symmetrize the divergences, project them onto a positive semidefinite space, and RBFize them to get a kernel
 
 Then use the Jupyter notebook notebooks/kernelEvaluation3D.py to 
 - Load the saved divergence graphs
